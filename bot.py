@@ -26,6 +26,7 @@ from discord.ext import commands
 import catpg
 import config
 import database
+print(f"Token loaded: {config.TOKEN[:10]}...")  # Prints first 10 chars only
 
 winuvloop.install()
 
@@ -105,6 +106,7 @@ bot.cat_bot_reload_hook = reload  # pyright: ignore
 
 try:
     config.HARD_RESTART_TIME = time.time()
+    print(f"Token loaded: {config.TOKEN[:10]}...")  # Prints first 10 chars only\
     bot.run(config.TOKEN)
 finally:
     asyncio.run(database.close())
