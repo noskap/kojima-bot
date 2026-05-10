@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { eq } from "drizzle-orm";
 import type { Command } from "../index";
 import { db } from "../db";
@@ -74,7 +74,7 @@ const command: Command = {
         ),
     async execute(interaction) {
         if (!interaction.guildId) {
-            await interaction.reply({ content: "Use this in a server.", ephemeral: true });
+            await interaction.reply({ content: "Use this in a server.", flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -86,7 +86,7 @@ const command: Command = {
         if (sub === "balance") {
             const bal = profile.rouletteBalance ?? 0;
             await interaction.reply({
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
                 embeds: [
                     new EmbedBuilder()
                         .setTitle("Casino chips")
@@ -102,7 +102,7 @@ const command: Command = {
         if (bet > balance) {
             await interaction.reply({
                 content: `You only have **${balance.toLocaleString()}** chips. Try \`/gamble balance\`.`,
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
             return;
         }

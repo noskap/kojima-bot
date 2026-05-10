@@ -1,4 +1,4 @@
-import { Client, SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } from "discord.js";
 import { eq } from "drizzle-orm";
 import type { Command } from "../index";
 import { db } from "../db";
@@ -6,7 +6,7 @@ import { channels, profiles } from "../db/schema";
 import { CONFIG } from "../config";
 import { RARITIES } from "../lib/rarities";
 import { getOrCreateProfile, guildLeaderboard } from "../lib/game-db";
-import { forceSpawnNow } from "../services/gameplay";
+import { executeForceSpawnSlash } from "../lib/force-spawn-slash";
 import { listUnlockedAchievements, processGiftAchievements, totalAchievementCount } from "../lib/achievements";
 
 const command: Command = {
@@ -67,7 +67,7 @@ const command: Command = {
         ),
     async execute(interaction) {
         if (!interaction.guildId || !interaction.guild) {
-            await interaction.reply({ content: "Use this in a server.", ephemeral: true });
+            await interaction.reply({ content: "Use this in a server.", flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -77,7 +77,7 @@ const command: Command = {
         if (["setup", "stop", "interval", "forcespawn"].includes(sub) && !canManage) {
             await interaction.reply({
                 content: "You need **Manage Channels** for that.",
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
             return;
         }
@@ -86,23 +86,7 @@ const command: Command = {
         const nowSec = Math.floor(Date.now() / 1000);
 
         if (sub === "forcespawn") {
-            const typePick = interaction.options.getString("type");
-            const forced = typePick ? RARITIES.find((r) => r.display === typePick) : undefined;
-            if (typePick && !forced) {
-                await interaction.reply({ content: "That type isn’t in the rarity list.", ephemeral: true });
-                return;
-            }
-            await interaction.deferReply({ ephemeral: true });
-            const res = await forceSpawnNow(interaction.client as Client, interaction.guildId, channelId, forced);
-            if (!res.ok) {
-                await interaction.editReply(res.reason);
-                return;
-            }
-            await interaction.editReply(
-                forced
-                    ? `Spawned **${forced.display}** ${CONFIG.ENTITY_NAME}.`
-                    : `Posted a random **${CONFIG.ENTITY_NAME}** spawn.`,
-            );
+            await executeForceSpawnSlash(interaction);
             return;
         }
 
@@ -148,13 +132,16 @@ const command: Command = {
             if (min > max) {
                 await interaction.reply({
                     content: "`min_seconds` must be less than or equal to `max_seconds`.",
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
                 return;
             }
             const existing = await db.select().from(channels).where(eq(channels.id, channelId)).get();
             if (!existing) {
-                await interaction.reply({ content: "Run `/kojima setup` in this channel first.", ephemeral: true });
+                await interaction.reply({
+                    content: "Run `/kojima setup` in this channel first.",
+                    flags: MessageFlags.Ephemeral,
+                });
                 return;
             }
             await db
@@ -169,7 +156,10 @@ const command: Command = {
         if (sub === "last") {
             const row = await db.select().from(channels).where(eq(channels.id, channelId)).get();
             if (!row?.lastCatcherId || !row.lastCatchRarity) {
-                await interaction.reply({ content: "No catches recorded in this channel yet.", ephemeral: true });
+                await interaction.reply({
+                    content: "No catches recorded in this channel yet.",
+                    flags: MessageFlags.Ephemeral,
+                });
                 return;
             }
             const when = row.lastCatches ? `<t:${row.lastCatches}:R>` : "some time ago";
@@ -183,7 +173,10 @@ const command: Command = {
         if (sub === "leaderboard") {
             const rows = await guildLeaderboard(interaction.guildId, 10);
             if (!rows.length) {
-                await interaction.reply({ content: "No catches yet — someone needs to grab a spawn first.", ephemeral: true });
+                await interaction.reply({
+                    content: "No catches yet — someone needs to grab a spawn first.",
+                    flags: MessageFlags.Ephemeral,
+                });
                 return;
             }
             const lines: string[] = [];
@@ -207,11 +200,17 @@ const command: Command = {
             const note = interaction.options.getString("note");
 
             if (target.id === interaction.user.id) {
-                await interaction.reply({ content: "Gift someone else — generosity is about *others*.", ephemeral: true });
+                await interaction.reply({
+                    content: "Gift someone else — generosity is about *others*.",
+                    flags: MessageFlags.Ephemeral,
+                });
                 return;
             }
             if (target.bot) {
-                await interaction.reply({ content: "Bots run on electricity, not compliments.", ephemeral: true });
+                await interaction.reply({
+                    content: "Bots run on electricity, not compliments.",
+                    flags: MessageFlags.Ephemeral,
+                });
                 return;
             }
 
@@ -276,7 +275,10 @@ const command: Command = {
                 .setDescription(`**${list.length}/${total}** unlocked\n\n${lines}`)
                 .setColor(0x57f287);
 
-            await interaction.reply({ embeds: [embed], ephemeral: target.id !== interaction.user.id });
+            await interaction.reply({
+                embeds: [embed],
+                ...(target.id !== interaction.user.id ? { flags: MessageFlags.Ephemeral } : {}),
+            });
         }
     },
 };

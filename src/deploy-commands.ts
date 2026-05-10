@@ -32,13 +32,18 @@ async function deploy(): Promise<void> {
     const rest = new REST().setToken(CONFIG.TOKEN);
 
     try {
-        console.log(`Started refreshing ${commands.length} application (/) commands.`);
+        // Wipe GLOBAL commands — otherwise orphans like `/cursed` or `/forcespawn` from old drafts
+        // stay visible in every server (guild + global merge in the client UI).
+        await rest.put(Routes.applicationCommands(CONFIG.CLIENT_ID), { body: [] });
+        console.log("Cleared global application commands for this bot.");
+
+        console.log(`Publishing ${commands.length} guild-only (/) commands to GUILD_ID…`);
 
         const data = (await rest.put(Routes.applicationGuildCommands(CONFIG.CLIENT_ID, CONFIG.GUILD_ID), {
             body: commands,
         })) as unknown[];
 
-        console.log(`Successfully reloaded ${data.length} application (/) commands.`);
+        console.log(`Guild commands OK: ${data.length} registered for your GUILD_ID (see ping, profile, kojima, gamble).`);
     } catch (error) {
         console.error(error);
         process.exit(1);

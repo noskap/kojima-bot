@@ -4,6 +4,7 @@ import {
     ButtonBuilder,
     ButtonStyle,
     Client,
+    MessageFlags,
     EmbedBuilder,
     ButtonInteraction,
     Message,
@@ -254,7 +255,7 @@ export async function handleCatchButton(interaction: ButtonInteraction): Promise
     if (!channelId || !messageId) return;
     if (interaction.channelId !== channelId) {
         await interaction
-            .reply({ content: "This button belongs to another channel.", ephemeral: true })
+            .reply({ content: "This button belongs to another channel.", flags: MessageFlags.Ephemeral })
             .catch(() => {});
         return;
     }
@@ -265,7 +266,7 @@ export async function handleCatchButton(interaction: ButtonInteraction): Promise
     if (!row || row.cat !== messageId) {
         await interaction.followUp({
             content: "Too slow — that spawn is already gone.",
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
         });
         return;
     }
@@ -344,7 +345,7 @@ async function executeCatch(opts: {
             if (interaction) {
                 await interaction.followUp({
                     content: "Someone beat you to it!",
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
             }
             return;
@@ -446,7 +447,7 @@ async function executeCatch(opts: {
         if (interaction) {
             await interaction.followUp({
                 content: "Something broke while processing that catch.",
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
         }
     } finally {

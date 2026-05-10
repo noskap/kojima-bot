@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder, EmbedBuilder } from "discord.js";
 import { eq, and } from "drizzle-orm";
 import type { Command } from "../index";
 import { db } from "../db";
@@ -37,7 +37,7 @@ const command: Command = {
         .addUserOption((o) => o.setName("user").setDescription("Whose profile to show").setRequired(false)),
     async execute(interaction) {
         if (!interaction.guildId) {
-            await interaction.reply({ content: "Use this in a server.", ephemeral: true });
+            await interaction.reply({ content: "Use this in a server.", flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -52,7 +52,7 @@ const command: Command = {
         if (!row || (row.totalCatches ?? 0) === 0) {
             await interaction.reply({
                 content: `${targetUser.username} has not caught any **${CONFIG.ENTITY_NAME}** here yet.`,
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
             return;
         }

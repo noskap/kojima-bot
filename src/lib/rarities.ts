@@ -88,6 +88,23 @@ export function isTrashSlot(r: RarityDef): boolean {
     return i >= 0 ? PROFILE_COUNT_SLOTS[i] === "countTrash" : false;
 }
 
+/** Resolve `/forcespawn type:` or `/kojima forcespawn type:` → rarity (exact, case-insensitive display, or fileKey). */
+export function rarityFromTypeOption(raw: string | null | undefined): RarityDef | undefined {
+    if (raw == null) return undefined;
+    const p = raw.trim();
+    if (p === "") return undefined;
+
+    let r = RARITIES.find((x) => x.display === p);
+    if (r) return r;
+
+    const lowDisplay = p.toLowerCase().replace(/\s+/g, " ");
+    r = RARITIES.find((x) => x.display.toLowerCase() === lowDisplay);
+    if (r) return r;
+
+    const asFileKey = lowDisplay.replace(/ /g, "_");
+    return RARITIES.find((x) => x.fileKey.toLowerCase() === asFileKey);
+}
+
 export function rollRarity(): RarityDef {
     const total = RARITIES.reduce((s, r) => s + r.weight, 0);
     let n = Math.random() * total;

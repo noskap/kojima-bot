@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import type { Command } from "../../index";
 import { CONFIG } from "../../config";
 
@@ -10,7 +10,7 @@ const command: Command = {
         // You can use CONFIG.ENTITY_NAME here too!
         await interaction.reply({
             content: `Hello! This is a custom command. I see you like ${CONFIG.ENTITY_NAME}s!`,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     }
 };
