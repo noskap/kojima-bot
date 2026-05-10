@@ -25,7 +25,11 @@ A Discord bot about catching things... rebuilt in Bun!
     ```bash
     cp .env.example .env
     ```
-    Edit `.env` and fill in your Token, Client ID, and Guild ID.
+    Edit `.env` — see **`.env.example`** for all variables.
+
+    Required: **`DISCORD_TOKEN`**, **`CLIENT_ID`**, **`GUILD_ID`**.
+
+    Common optional knobs: **`ENTITY_NAME`**, **`CATCH_TRIGGER`**, **`LINK_FIXUP_X`**, **`LINK_FIXUP_INSTAGRAM`** (mirror x.com / instagram for embeds — needs **Manage Messages** + **Send Messages** in that channel).
 
 ### Running the Bot
 
@@ -49,7 +53,7 @@ In Discord (requires **Manage Channels** where noted):
 2. Wait for a spawn; reply with your catch phrase or click **Catch**.
 3. Tune timing with `/kojima interval` (min/max seconds between spawns after each catch).
 
-Bot permissions in that channel: **Send Messages**, **Attach Files**, **Embed Links**, **Read Message History** (recommended), **Add Reactions** (optional, for “nice try” 😂 when someone mistypes early).
+Bot permissions in that channel: **Send Messages**, **Attach Files**, **Embed Links**, **Read Message History** (recommended), **Add Reactions** (optional, for “nice try” 😂 when someone mistypes early). If **`LINK_FIXUP_*`** env flags are enabled, also grant **Manage Messages** there so the bot can delete and repost link messages.
 
 ## Deployment (PM2)
 This project includes an `ecosystem.config.js` for easy deployment with PM2.

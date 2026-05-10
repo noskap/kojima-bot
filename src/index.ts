@@ -7,6 +7,7 @@ import { registerMemeSlashHandlers } from "./lib/meme-commands";
 import { initDB } from "./db";
 import { handleCatchButton, handleCatchText, startGameplayLoops } from "./services/gameplay";
 import { handleWordReactions, primeWordReactionEmojis } from "./services/word-reactions";
+import { logLinkFixupStartup, maybeFixupEmbeddedLinks } from "./services/link-fixup";
 
 export interface Command {
     data: { name: string; toJSON: () => unknown };
@@ -57,6 +58,7 @@ async function main(): Promise<void> {
 
     client.once(Events.ClientReady, async (c) => {
         console.log(`Ready! Logged in as ${c.user.tag}`);
+        logLinkFixupStartup();
         initDB();
         await primeWordReactionEmojis(c);
         startGameplayLoops(client);
@@ -65,6 +67,7 @@ async function main(): Promise<void> {
     client.on(Events.MessageCreate, (message) => {
         void handleCatchText(message);
         void handleWordReactions(client, message);
+        void maybeFixupEmbeddedLinks(message);
     });
 
     client.on(Events.InteractionCreate, async (interaction) => {
