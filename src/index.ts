@@ -75,21 +75,29 @@ async function main(): Promise<void> {
 
         if (!interaction.isChatInputCommand()) return;
 
-        const cmd = client.commands.get(interaction.commandName);
+        const { commandName } = interaction;
+        const cmd = client.commands.get(commandName);
         if (!cmd) {
-            console.error(`No command matching ${interaction.commandName}`);
+            console.warn(
+                `[slash] unknown "${commandName}" user=${interaction.user.tag} (${interaction.user.id}) guild=${interaction.guildId ?? "DM"} channel=${interaction.channelId}`,
+            );
             return;
         }
 
+        const ctx = `user=${interaction.user.tag} (${interaction.user.id}) guild=${interaction.guildId ?? "DM"} channel=${interaction.channelId}`;
+        const t0 = Date.now();
+        console.log(`[slash] start /${commandName} ${ctx}`);
+
         try {
             await cmd.execute(interaction);
+            console.log(`[slash] ok /${commandName} (${Date.now() - t0}ms)`);
         } catch (error) {
-            console.error(error);
+            console.error(`[slash] fail /${commandName} (${Date.now() - t0}ms) ${ctx}`, error);
             const payload = { content: "There was an error while executing this command!", flags: MessageFlags.Ephemeral };
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp(payload);
+                await interaction.followUp(payload).catch((e) => console.error("[slash] followUp after fail failed", e));
             } else {
-                await interaction.reply(payload);
+                await interaction.reply(payload).catch((e) => console.error("[slash] reply after fail failed", e));
             }
         }
     });

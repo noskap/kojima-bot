@@ -10,6 +10,13 @@ const SILLY_EXTRAS = [
     "This message will self-destruct in… never. Discord logs exist.",
 ];
 
+/** One random colonel message; `{{entity}}` placeholders use `entity` when present. */
+export function randomColonelQuote(entity?: string): string {
+    const raw = RAW_QUOTES[Math.floor(Math.random() * RAW_QUOTES.length)]!;
+    const e = entity ?? "Snake";
+    return raw.replace(/\{\{entity\}\}/g, e);
+}
+
 export function randomCelebrationQuote(entity: string): string {
     const base = RAW_QUOTES[Math.floor(Math.random() * RAW_QUOTES.length)]!.replace(
         /\{\{entity\}\}/g,
