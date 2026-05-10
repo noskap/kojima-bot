@@ -14,7 +14,7 @@ import {
     GuildMember,
 } from "discord.js";
 import { readFileSync } from "fs";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db";
 import { channels, profiles } from "../db/schema";
 import { CONFIG } from "../config";
@@ -31,6 +31,56 @@ import { getOrCreateProfile, upsertUsername } from "../lib/game-db";
 import { processCatchAchievements } from "../lib/achievements";
 
 const processingSpawnIds = new Set<string>();
+
+/** Ensures only one `postSpawn` / `forceSpawn` pipeline runs per channel (avoids duplicate messages when ticks overlap slow Discord I/O). */
+const spawnInFlightByChannel = new Set<string>();
+
+/** Discord snowflake → UTC ms (message creation time). */
+const DISCORD_EPOCH_MS = 1420070400000;
+
+function spawnMessageAgeSeconds(messageId: string): number {
+    try {
+        const createdMs = Number(BigInt(messageId) >> 22n) + DISCORD_EPOCH_MS;
+        return Math.max(0, (Date.now() - createdMs) / 1000);
+    } catch {
+        return 0;
+    }
+}
+
+async function expireStaleSpawnUI(
+    client: Client,
+    guildId: string,
+    channelId: string,
+    messageId: string,
+    rarityDisplay: string,
+): Promise<void> {
+    const guild = client.guilds.cache.get(guildId);
+    const raw = guild ? await guild.channels.fetch(channelId).catch(() => null) : null;
+    if (!raw?.isTextBased() || raw.isDMBased()) return;
+    const msg = await raw.messages.fetch(messageId).catch(() => null);
+    if (!msg) return;
+
+    const expiredEmbed = new EmbedBuilder()
+        .setTitle(`${rarityDisplay} ${CONFIG.ENTITY_NAME} got away`)
+        .setDescription("_No one caught it in time._ The art is removed — wait for the next spawn.")
+        .setColor(0x747f8d);
+
+    await msg
+        .edit({
+            embeds: [expiredEmbed],
+            files: [],
+            components: [
+                new ActionRowBuilder<ButtonBuilder>().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`kojima_catch_dead:${channelId}:${messageId}`)
+                        .setLabel("Expired")
+                        .setStyle(ButtonStyle.Secondary)
+                        .setDisabled(true),
+                ),
+            ],
+        })
+        .catch((e) => console.warn(`[spawn] failed to edit expired spawn ${channelId}/${messageId}`, e));
+}
 
 /** Avoid repeating the same permission wall-of-text every tick */
 const accessDeniedLogged = new Set<string>();
@@ -103,6 +153,28 @@ async function tryReactPointLaugh(message: Message) {
 }
 
 export async function tickSpawns(client: Client): Promise<void> {
+    const ttl = CONFIG.SPAWN_TTL_SECONDS;
+    if (ttl > 0) {
+        const rowsForExpiry = db.select().from(channels).all();
+        for (const chRow of rowsForExpiry) {
+            if (!chRow.guildId) continue;
+            const mid = chRow.cat;
+            if (!mid || mid === "0") continue;
+            if (spawnMessageAgeSeconds(mid) < ttl) continue;
+
+            const nowSec = Math.floor(Date.now() / 1000);
+            const { changes } = db
+                .update(channels)
+                .set({ cat: "0", yetToSpawn: nowSec + 30 })
+                .where(and(eq(channels.id, chRow.id), eq(channels.cat, mid)))
+                .run();
+            if (changes === 0) continue;
+
+            console.log(`[spawn] expired uncaught spawn channel=${chRow.id} message=${mid} (>${ttl}s)`);
+            await expireStaleSpawnUI(client, chRow.guildId, chRow.id, mid, chRow.catType || RARITIES[0]!.display);
+        }
+    }
+
     const rows = db.select().from(channels).all();
     const nowSec = Math.floor(Date.now() / 1000);
 
@@ -116,6 +188,8 @@ export async function tickSpawns(client: Client): Promise<void> {
         const guild = client.guilds.cache.get(chRow.guildId);
         if (!guild) continue;
 
+        if (spawnInFlightByChannel.has(chRow.id)) continue;
+        spawnInFlightByChannel.add(chRow.id);
         try {
             await postSpawn(client, chRow.guildId, chRow.id, {});
         } catch (e) {
@@ -125,6 +199,8 @@ export async function tickSpawns(client: Client): Promise<void> {
             } else {
                 console.error(`[spawn] failed channel ${chRow.id}:`, e);
             }
+        } finally {
+            spawnInFlightByChannel.delete(chRow.id);
         }
     }
 }
@@ -206,6 +282,10 @@ export async function forceSpawnNow(
     channelId: string,
     forcedRarity?: RarityDef,
 ): Promise<ForceSpawnResult> {
+    if (spawnInFlightByChannel.has(channelId)) {
+        return { ok: false, reason: "A spawn is already being posted in this channel — try again in a moment." };
+    }
+
     const row = await db.select().from(channels).where(eq(channels.id, channelId)).get();
     if (!row?.guildId) {
         return { ok: false, reason: "This channel is not set up. Run `/kojima setup` first." };
@@ -214,37 +294,42 @@ export async function forceSpawnNow(
         return { ok: false, reason: "Channel data mismatch — try `/kojima setup` again." };
     }
 
-    if (row.cat && row.cat !== "0") {
-        const guild = await client.guilds.fetch(guildId).catch(() => null);
-        const raw = guild ? await guild.channels.fetch(channelId).catch(() => null) : null;
-        if (raw?.isTextBased() && !raw.isDMBased()) {
-            const msg = await raw.messages.fetch(row.cat).catch(() => null);
-            await msg?.delete().catch(() => {});
-        }
-    }
-
-    await db
-        .update(channels)
-        .set({ cat: "0", yetToSpawn: 0 })
-        .where(eq(channels.id, channelId))
-        .run();
-
+    spawnInFlightByChannel.add(channelId);
     try {
-        const posted = await postSpawn(client, guildId, channelId, { forcedRarity });
-        if (!posted) {
-            return { ok: false, reason: "Could not post (bot needs View/Send/Embed/Attach in this channel)." };
+        if (row.cat && row.cat !== "0") {
+            const guild = await client.guilds.fetch(guildId).catch(() => null);
+            const raw = guild ? await guild.channels.fetch(channelId).catch(() => null) : null;
+            if (raw?.isTextBased() && !raw.isDMBased()) {
+                const msg = await raw.messages.fetch(row.cat).catch(() => null);
+                await msg?.delete().catch(() => {});
+            }
         }
-    } catch (e) {
-        const code = apiErrorCode(e);
-        if (code === 50001 || code === 50013) {
-            await backoffSpawnRetry(channelId, "Discord blocked posting when forcing spawn.");
-        } else {
-            console.error("[forcespawn]", e);
-        }
-        return { ok: false, reason: "Could not post the spawn (permissions or network). Check bot channel access." };
-    }
 
-    return { ok: true };
+        await db
+            .update(channels)
+            .set({ cat: "0", yetToSpawn: 0 })
+            .where(eq(channels.id, channelId))
+            .run();
+
+        try {
+            const posted = await postSpawn(client, guildId, channelId, { forcedRarity });
+            if (!posted) {
+                return { ok: false, reason: "Could not post (bot needs View/Send/Embed/Attach in this channel)." };
+            }
+        } catch (e) {
+            const code = apiErrorCode(e);
+            if (code === 50001 || code === 50013) {
+                await backoffSpawnRetry(channelId, "Discord blocked posting when forcing spawn.");
+            } else {
+                console.error("[forcespawn]", e);
+            }
+            return { ok: false, reason: "Could not post the spawn (permissions or network). Check bot channel access." };
+        }
+
+        return { ok: true };
+    } finally {
+        spawnInFlightByChannel.delete(channelId);
+    }
 }
 
 export async function handleCatchButton(interaction: ButtonInteraction): Promise<void> {

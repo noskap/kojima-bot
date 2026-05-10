@@ -4,10 +4,11 @@ import { messages as RAW_QUOTES } from "../../colonel/src/data/messages.ts";
 
 const SILLY_EXTRAS = [
     "Anyway, water your plants.",
-    "Side quest complete. Back to reality.",
-    "Remember to stretch your wrists.",
-    "Consider touching grass between catches.",
-    "This message will self-destruct in… never. Discord logs exist.",
+//     "Side quest complete. Back to reality.",
+    "Remember to water your plants.",
+    "Consider touching plants between catches.",
+    "This message will self-destruct in… never. Water your plants.",
+    "Stay hydrated. Just kidding, water your plants."
 ];
 
 /** One random colonel message; `{{entity}}` placeholders use `entity` when present. */
