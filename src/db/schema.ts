@@ -247,6 +247,7 @@ export const profiles = sqliteTable("profiles", {
     rouletteBalance: integer("roulette_balance").default(100),
     rouletteWins: integer("roulette_wins").default(0),
     rouletteSpins: integer("roulette_spins").default(0),
+    flipPlays: integer("flip_plays").default(0),
     
     // Packs Inventory
     packWooden: integer("pack_wooden").default(0),
@@ -287,6 +288,21 @@ export const profiles = sqliteTable("profiles", {
 }, (t) => ({
     profilesUserGuild: uniqueIndex("profiles_user_guild").on(t.userId, t.guildId),
 }));
+
+// --- Achievements (unlock keys reference src/lib/achievements.ts) ---
+export const achievementUnlocks = sqliteTable(
+    "achievement_unlocks",
+    {
+        id: integer("id").primaryKey({ autoIncrement: true }),
+        userId: text("user_id").notNull(),
+        guildId: text("guild_id").notNull(),
+        key: text("key").notNull(),
+        unlockedAt: integer("unlocked_at").notNull(),
+    },
+    (t) => ({
+        achUserGuildKey: uniqueIndex("achievement_user_guild_key").on(t.userId, t.guildId, t.key),
+    }),
+);
 
 // --- Prisms Table ---
 // Boost items created by users

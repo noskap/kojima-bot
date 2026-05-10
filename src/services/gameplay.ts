@@ -19,6 +19,7 @@ import { CONFIG } from "../config";
 import { rollRarity, spawnImagePathForRarity, profileCountKey, type RarityDef, RARITIES } from "../lib/rarities";
 import { randomCelebrationQuote } from "../lib/quotes";
 import { getOrCreateProfile, upsertUsername } from "../lib/game-db";
+import { processCatchAchievements } from "../lib/achievements";
 import { generateCatchImage } from "../utils/image-gen";
 
 const processingSpawnIds = new Set<string>();
@@ -260,6 +261,15 @@ async function executeCatch(opts: {
 
         await db.update(profiles).set(profileUpd as never).where(eq(profiles.id, profile.id)).run();
 
+        const profileAfter = await db.select().from(profiles).where(eq(profiles.id, profile.id)).get();
+        const newAchievements = profileAfter
+            ? await processCatchAchievements(user.id, guildId, {
+                  profile: profileAfter,
+                  catchSeconds,
+                  rarityDisplay,
+              })
+            : [];
+
         const minS = fresh.spawnTimesMin ?? 60;
         const maxS = fresh.spawnTimesMax ?? 600;
         const span = Math.max(0, maxS - minS);
@@ -313,6 +323,13 @@ async function executeCatch(opts: {
             .setColor(rarityMeta.color)
             .setImage("attachment://catch.png")
             .setFooter({ text: `Your catches (this server): ${prevTotal + 1}` });
+
+        if (newAchievements?.length) {
+            celebrate.addFields({
+                name: "🏆 Achievement unlocked",
+                value: newAchievements.map((a) => `**${a.title}** — ${a.description}`).join("\n"),
+            });
+        }
 
         const textCh = spawnMessage.channel;
         if (textCh.isTextBased() && !textCh.isDMBased()) {

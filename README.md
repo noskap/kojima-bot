@@ -5,7 +5,8 @@ A Discord bot about catching things... rebuilt in Bun!
 ## Features
 - **Random spawns**: Opt a channel in with `/kojima setup`; wild entities appear on a timer with rarity-weighted art from `assets/images/spawn/`.
 - **Catch**: Type your catch phrase (see `CATCH_TRIGGER` / `ENTITY_NAME`) **or** press the **Catch** button on the spawn card — first player wins.
-- **Slash commands**: `/kojima` (setup, spacing, last catch, leaderboard), `/profile`, `/ping`.
+- **Slash commands**: `/kojima` (setup, spacing, last catch, leaderboard, **gift**, **achievements**), `/profile`, `/ping`, **`/gamble`** (slots, coin flip, roulette + chip balance).
+- **Achievements**: Unlock milestones from catches, gifts, and casino play — see `/kojima achievements`.
 - **Customizable**: Rename the entity via `ENTITY_NAME`, swap spawn PNGs, tune fonts in `src/config.ts`.
 - **Fast**: [Bun](https://bun.sh) + SQLite (Drizzle).
 

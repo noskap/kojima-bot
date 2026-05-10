@@ -1,10 +1,11 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from "discord.js";
 import { eq } from "drizzle-orm";
 import type { Command } from "../index";
 import { db } from "../db";
-import { channels } from "../db/schema";
+import { channels, profiles } from "../db/schema";
 import { CONFIG } from "../config";
-import { guildLeaderboard } from "../lib/game-db";
+import { getOrCreateProfile, guildLeaderboard } from "../lib/game-db";
+import { listUnlockedAchievements, processGiftAchievements, totalAchievementCount } from "../lib/achievements";
 
 const command: Command = {
     data: new SlashCommandBuilder()
@@ -34,7 +35,22 @@ const command: Command = {
                 ),
         )
         .addSubcommand((sc) => sc.setName("last").setDescription("Last catch recorded for this channel"))
-        .addSubcommand((sc) => sc.setName("leaderboard").setDescription("Top catchers in this server")),
+        .addSubcommand((sc) => sc.setName("leaderboard").setDescription("Top catchers in this server"))
+        .addSubcommand((sc) =>
+            sc
+                .setName("gift")
+                .setDescription("Give another member a gift shout-out (tracks stats)")
+                .addUserOption((o) => o.setName("user").setDescription("Recipient").setRequired(true))
+                .addStringOption((o) =>
+                    o.setName("note").setDescription("Optional message").setMaxLength(200),
+                ),
+        )
+        .addSubcommand((sc) =>
+            sc
+                .setName("achievements")
+                .setDescription("Show unlocked achievements")
+                .addUserOption((o) => o.setName("user").setDescription("Whose list to show")),
+        ),
     async execute(interaction) {
         if (!interaction.guildId || !interaction.guild) {
             await interaction.reply({ content: "Use this in a server.", ephemeral: true });
@@ -148,6 +164,84 @@ const command: Command = {
             await interaction.reply({
                 content: `**Top ${CONFIG.ENTITY_NAME} catchers**\n\n${lines.join("\n")}`,
             });
+            return;
+        }
+
+        if (sub === "gift") {
+            const target = interaction.options.getUser("user", true);
+            const note = interaction.options.getString("note");
+
+            if (target.id === interaction.user.id) {
+                await interaction.reply({ content: "Gift someone else — generosity is about *others*.", ephemeral: true });
+                return;
+            }
+            if (target.bot) {
+                await interaction.reply({ content: "Bots run on electricity, not compliments.", ephemeral: true });
+                return;
+            }
+
+            const giverProf = await getOrCreateProfile(interaction.user.id, interaction.guildId);
+            const recvProf = await getOrCreateProfile(target.id, interaction.guildId);
+
+            await db
+                .update(profiles)
+                .set({ catsGifted: (giverProf.catsGifted ?? 0) + 1 } as never)
+                .where(eq(profiles.id, giverProf.id))
+                .run();
+            await db
+                .update(profiles)
+                .set({ catGiftsRecieved: (recvProf.catGiftsRecieved ?? 0) + 1 } as never)
+                .where(eq(profiles.id, recvProf.id))
+                .run();
+
+            const gFresh = (await db.select().from(profiles).where(eq(profiles.id, giverProf.id)).get())!;
+            const rFresh = (await db.select().from(profiles).where(eq(profiles.id, recvProf.id)).get())!;
+            const { giver: ga, receiver: ra } = await processGiftAchievements(
+                interaction.user.id,
+                target.id,
+                interaction.guildId,
+                gFresh,
+                rFresh,
+            );
+
+            let extra = "";
+            if (ga.length || ra.length) {
+                const bits = [...ga.map((a) => `**${a.title}** (giver)`), ...ra.map((a) => `**${a.title}** (${target.username})`)];
+                extra = "\n\n🏆 " + bits.join(", ");
+            }
+
+            const embed = new EmbedBuilder()
+                .setTitle("Gift delivered")
+                .setDescription(
+                    `**${interaction.user.username}** sent a gift to **${target.username}**!\n` +
+                        (note ? `\n_${note}_\n` : "") +
+                        `\n_${CONFIG.ENTITY_NAME}-themed friendship increases._` +
+                        extra,
+                )
+                .setColor(0xff69b4);
+
+            await interaction.reply({
+                content: `${target}`,
+                embeds: [embed],
+                allowedMentions: { users: [target.id] },
+            });
+            return;
+        }
+
+        if (sub === "achievements") {
+            const target = interaction.options.getUser("user") || interaction.user;
+            const list = await listUnlockedAchievements(target.id, interaction.guildId);
+            const total = totalAchievementCount();
+            const lines = list.length
+                ? list.map((a) => `• **${a.title}** — ${a.description}`).join("\n")
+                : "_Nothing unlocked yet — catch spawns, gamble, or gift friends._";
+
+            const embed = new EmbedBuilder()
+                .setTitle(`${target.username}'s achievements`)
+                .setDescription(`**${list.length}/${total}** unlocked\n\n${lines}`)
+                .setColor(0x57f287);
+
+            await interaction.reply({ embeds: [embed], ephemeral: target.id !== interaction.user.id });
         }
     },
 };
