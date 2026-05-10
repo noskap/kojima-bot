@@ -16,7 +16,7 @@ export const channels = sqliteTable("channels", {
     // Spawning State
     cat: text("cat").default("0"), // Message ID of the spawned cat (0 if none)
     spawnTimesMin: integer("spawn_times_min").default(60),
-    spawnTimesMax: integer("spawn_times_max").default(600),
+    spawnTimesMax: integer("spawn_times_max").default(450),
     lastCatches: integer("lastcatches").default(0), // Timestamp
     yetToSpawn: integer("yet_to_spawn").default(0), // Timestamp
     forceSpawned: integer("forcespawned", { mode: "boolean" }).default(false),

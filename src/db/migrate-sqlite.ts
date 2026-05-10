@@ -25,7 +25,7 @@ export function ensureSqliteSchema(db: Database): void {
     if (tableExists(db, "channels")) {
         addColumn(db, "channels", "cat", `text DEFAULT '0'`);
         addColumn(db, "channels", "spawn_times_min", "integer DEFAULT 60");
-        addColumn(db, "channels", "spawn_times_max", "integer DEFAULT 600");
+        addColumn(db, "channels", "spawn_times_max", "integer DEFAULT 450");
         addColumn(db, "channels", "lastcatches", "integer DEFAULT 0");
         addColumn(db, "channels", "yet_to_spawn", "integer DEFAULT 0");
         addColumn(db, "channels", "forcespawned", "integer DEFAULT 0");

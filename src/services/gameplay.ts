@@ -14,7 +14,7 @@ import {
     GuildMember,
 } from "discord.js";
 import { readFileSync } from "fs";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { channels, profiles } from "../db/schema";
 import { CONFIG } from "../config";
@@ -35,51 +35,29 @@ const processingSpawnIds = new Set<string>();
 /** Ensures only one `postSpawn` / `forceSpawn` pipeline runs per channel (avoids duplicate messages when ticks overlap slow Discord I/O). */
 const spawnInFlightByChannel = new Set<string>();
 
-/** Discord snowflake → UTC ms (message creation time). */
-const DISCORD_EPOCH_MS = 1420070400000;
-
-function spawnMessageAgeSeconds(messageId: string): number {
-    try {
-        const createdMs = Number(BigInt(messageId) >> 22n) + DISCORD_EPOCH_MS;
-        return Math.max(0, (Date.now() - createdMs) / 1000);
-    } catch {
-        return 0;
-    }
-}
-
-async function expireStaleSpawnUI(
-    client: Client,
-    guildId: string,
-    channelId: string,
-    messageId: string,
-    rarityDisplay: string,
-): Promise<void> {
-    const guild = client.guilds.cache.get(guildId);
-    const raw = guild ? await guild.channels.fetch(channelId).catch(() => null) : null;
-    if (!raw?.isTextBased() || raw.isDMBased()) return;
-    const msg = await raw.messages.fetch(messageId).catch(() => null);
-    if (!msg) return;
-
+/** Strip art and grey out Catch when this spawn is superseded by a new one (e.g. `/kojima forcespawn`). */
+async function expireSpawnMessageAsSuperseded(msg: Message, rarityDisplay: string): Promise<void> {
+    const cid = msg.channelId;
     const expiredEmbed = new EmbedBuilder()
-        .setTitle(`${rarityDisplay} ${CONFIG.ENTITY_NAME} got away`)
-        .setDescription("_No one caught it in time._ The art is removed — wait for the next spawn.")
+        .setTitle(`${rarityDisplay} ${CONFIG.ENTITY_NAME} superseded`)
+        .setDescription(
+            "_No longer the active spawn._ A **new one** replaced this (`/kojima forcespawn` or random spawn ticker). Image removed.",
+        )
         .setColor(0x747f8d);
 
-    await msg
-        .edit({
-            embeds: [expiredEmbed],
-            files: [],
-            components: [
-                new ActionRowBuilder<ButtonBuilder>().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`kojima_catch_dead:${channelId}:${messageId}`)
-                        .setLabel("Expired")
-                        .setStyle(ButtonStyle.Secondary)
-                        .setDisabled(true),
-                ),
-            ],
-        })
-        .catch((e) => console.warn(`[spawn] failed to edit expired spawn ${channelId}/${messageId}`, e));
+    await msg.edit({
+        embeds: [expiredEmbed],
+        files: [],
+        components: [
+            new ActionRowBuilder<ButtonBuilder>().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`kojima_catch_dead:${cid}:${msg.id}`)
+                    .setLabel("Inactive")
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(true),
+            ),
+        ],
+    });
 }
 
 /** Avoid repeating the same permission wall-of-text every tick */
@@ -153,28 +131,6 @@ async function tryReactPointLaugh(message: Message) {
 }
 
 export async function tickSpawns(client: Client): Promise<void> {
-    const ttl = CONFIG.SPAWN_TTL_SECONDS;
-    if (ttl > 0) {
-        const rowsForExpiry = db.select().from(channels).all();
-        for (const chRow of rowsForExpiry) {
-            if (!chRow.guildId) continue;
-            const mid = chRow.cat;
-            if (!mid || mid === "0") continue;
-            if (spawnMessageAgeSeconds(mid) < ttl) continue;
-
-            const nowSec = Math.floor(Date.now() / 1000);
-            const { changes } = db
-                .update(channels)
-                .set({ cat: "0", yetToSpawn: nowSec + 30 })
-                .where(and(eq(channels.id, chRow.id), eq(channels.cat, mid)))
-                .run();
-            if (changes === 0) continue;
-
-            console.log(`[spawn] expired uncaught spawn channel=${chRow.id} message=${mid} (>${ttl}s)`);
-            await expireStaleSpawnUI(client, chRow.guildId, chRow.id, mid, chRow.catType || RARITIES[0]!.display);
-        }
-    }
-
     const rows = db.select().from(channels).all();
     const nowSec = Math.floor(Date.now() / 1000);
 
@@ -301,7 +257,12 @@ export async function forceSpawnNow(
             const raw = guild ? await guild.channels.fetch(channelId).catch(() => null) : null;
             if (raw?.isTextBased() && !raw.isDMBased()) {
                 const msg = await raw.messages.fetch(row.cat).catch(() => null);
-                await msg?.delete().catch(() => {});
+                if (msg) {
+                    await expireSpawnMessageAsSuperseded(msg, row.catType || RARITIES[0]!.display).catch((e) => {
+                        console.warn(`[spawn] forcespawn: could not grey out old spawn — deleting`, e);
+                        msg.delete().catch(() => {});
+                    });
+                }
             }
         }
 
@@ -475,7 +436,7 @@ async function executeCatch(opts: {
             : [];
 
         const minS = fresh.spawnTimesMin ?? 60;
-        const maxS = fresh.spawnTimesMax ?? 600;
+        const maxS = fresh.spawnTimesMax ?? 450;
         const span = Math.max(0, maxS - minS);
         const delaySec = minS + Math.floor(Math.random() * (span + 1));
         const nowSec = Math.floor(Date.now() / 1000);

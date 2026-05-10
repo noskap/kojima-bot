@@ -29,6 +29,11 @@ const command: Command = {
         .addSubcommand((sc) => sc.setName("stop").setDescription("Disable spawns in this channel"))
         .addSubcommand((sc) =>
             sc
+                .setName("next")
+                .setDescription("When random spawns can post here (scheduled / active spawn)")
+        )
+        .addSubcommand((sc) =>
+            sc
                 .setName("interval")
                 .setDescription("Set seconds between spawns (min–max, after each catch)")
                 .addIntegerOption((o) =>
@@ -74,7 +79,7 @@ const command: Command = {
         const sub = interaction.options.getSubcommand();
         const canManage = interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels);
 
-        if (["setup", "stop", "interval", "forcespawn"].includes(sub) && !canManage) {
+        if (["setup", "stop", "interval", "forcespawn", "next"].includes(sub) && !canManage) {
             await interaction.reply({
                 content: "You need **Manage Channels** for that.",
                 flags: MessageFlags.Ephemeral,
@@ -90,6 +95,44 @@ const command: Command = {
             return;
         }
 
+        if (sub === "next") {
+            const row = await db.select().from(channels).where(eq(channels.id, channelId)).get();
+            if (!row?.guildId) {
+                await interaction.reply({
+                    content: "Spawns aren’t configured here yet — run `/kojima setup` first.",
+                    flags: MessageFlags.Ephemeral,
+                });
+                return;
+            }
+
+            const minS = row.spawnTimesMin ?? 60;
+            const maxS = row.spawnTimesMax ?? 450;
+            const due = row.yetToSpawn ?? 0;
+
+            let text = "";
+
+            if (row.cat && row.cat !== "0") {
+                const gid = interaction.guildId;
+                const jump = `https://discord.com/channels/${gid}/${channelId}/${row.cat}`;
+                text +=
+                    `There is already an **active ${CONFIG.ENTITY_NAME} spawn** ([open message](${jump})). The bot won’t queue another random spawn until someone catches it (or \`/kojima forcespawn\` clears it).\n\n`;
+                text +=
+                    `_After each catch,_ the bot waits **${minS}–${maxS}** s (\`+ ~10 s\`) before posting the next spawn (checked every ~4 s).\n`;
+            } else if (due > nowSec) {
+                text += `Random spawns are **on hold until** <t:${due}:F> (<t:${due}:R>).\n\n`;
+                text += `_Idle gap after each catch is **${minS}–${maxS}** s + a small tick buffer._`;
+            } else {
+                text += `This channel **can get a spawn on the bot’s ~4 second tick** (there is no spawn message right now and the timer gate is cleared).\n\n`;
+                text += `_After catches, spacing is random **${minS}–${maxS}** s + tick buffer._`;
+            }
+
+            await interaction.reply({
+                embeds: [new EmbedBuilder().setTitle(`${CONFIG.ENTITY_NAME} spawn schedule`).setDescription(text).setColor(0x5865f2)],
+                flags: MessageFlags.Ephemeral,
+            });
+            return;
+        }
+
         if (sub === "setup") {
             await db
                 .insert(channels)
@@ -99,7 +142,7 @@ const command: Command = {
                     cat: "0",
                     yetToSpawn: nowSec - 1,
                     spawnTimesMin: 60,
-                    spawnTimesMax: 600,
+                    spawnTimesMax: 450,
                 })
                 .onConflictDoUpdate({
                     target: channels.id,
