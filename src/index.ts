@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { pathToFileURL } from "node:url";
 import { CONFIG } from "./config";
+import { registerMemeSlashHandlers } from "./lib/meme-commands";
 import { initDB } from "./db";
 import { handleCatchButton, handleCatchText, startGameplayLoops } from "./services/gameplay";
 import { handleWordReactions, primeWordReactionEmojis } from "./services/word-reactions";
@@ -52,6 +53,7 @@ async function loadCommands(): Promise<void> {
 
 async function main(): Promise<void> {
     await loadCommands();
+    registerMemeSlashHandlers(client.commands);
 
     client.once(Events.ClientReady, async (c) => {
         console.log(`Ready! Logged in as ${c.user.tag}`);

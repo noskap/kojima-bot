@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { pathToFileURL } from "node:url";
 import { CONFIG } from "./config";
+import { MEME_GUILD_COMMAND_CAP, buildMemeSlashBodies } from "./lib/meme-commands";
 
 const commands: unknown[] = [];
 const commandsPath = path.join(__dirname, "commands");
@@ -29,21 +30,36 @@ async function deploy(): Promise<void> {
         }
     }
 
+    const coreNames = new Set(
+        commands.map((c) => {
+            const o = c as { name?: string };
+            return o?.name ?? "";
+        }),
+    );
+
+    const roomForMemes = Math.max(0, MEME_GUILD_COMMAND_CAP - commands.length);
+    const memeBodies = buildMemeSlashBodies(coreNames, roomForMemes);
+    commands.push(...memeBodies);
+
+    if (commands.length > MEME_GUILD_COMMAND_CAP) {
+        console.warn(`Trimming slash commands from ${commands.length} to cap ${MEME_GUILD_COMMAND_CAP}.`);
+        commands.length = MEME_GUILD_COMMAND_CAP;
+    }
+
     const rest = new REST().setToken(CONFIG.TOKEN);
 
     try {
-        // Wipe GLOBAL commands — otherwise orphans like `/cursed` or `/forcespawn` from old drafts
-        // stay visible in every server (guild + global merge in the client UI).
+        // Wipe GLOBAL commands — otherwise orphans stay visible everywhere (guild + global merge).
         await rest.put(Routes.applicationCommands(CONFIG.CLIENT_ID), { body: [] });
         console.log("Cleared global application commands for this bot.");
 
-        console.log(`Publishing ${commands.length} guild-only (/) commands to GUILD_ID…`);
+        console.log(`Publishing ${commands.length} guild slash commands for GUILD_ID (full replace → old ones removed).`);
 
         const data = (await rest.put(Routes.applicationGuildCommands(CONFIG.CLIENT_ID, CONFIG.GUILD_ID), {
             body: commands,
         })) as unknown[];
 
-        console.log(`Guild commands OK: ${data.length} registered for your GUILD_ID (see ping, profile, kojima, gamble).`);
+        console.log(`Guild PUT OK — ${data.length} commands visible in this server.`);
     } catch (error) {
         console.error(error);
         process.exit(1);
