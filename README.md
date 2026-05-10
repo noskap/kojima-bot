@@ -56,7 +56,7 @@ In Discord (requires **Manage Channels** where noted):
 Bot permissions in that channel: **Send Messages**, **Attach Files**, **Embed Links**, **Read Message History** (recommended), **Add Reactions** (optional, for “nice try” 😂 when someone mistypes early). If **`LINK_FIXUP_*`** env flags are enabled, also grant **Manage Messages** there so the bot can delete and repost link messages.
 
 ## Deployment (PM2)
-This project includes an `ecosystem.config.js` for easy deployment with PM2.
+This project includes an `ecosystem.config.cjs` for easy deployment with PM2.
 
 1.  Make sure you have PM2 installed:
     ```bash
@@ -64,7 +64,7 @@ This project includes an `ecosystem.config.js` for easy deployment with PM2.
     ```
 2.  Start the bot:
     ```bash
-    pm2 start ecosystem.config.js
+    pm2 start ecosystem.config.cjs
     ```
 3.  Monitor:
     ```bash
