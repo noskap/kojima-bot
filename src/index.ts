@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { CONFIG } from "./config";
 import { initDB } from "./db";
 import { handleCatchButton, handleCatchText, startGameplayLoops } from "./services/gameplay";
+import { handleWordReactions, primeWordReactionEmojis } from "./services/word-reactions";
 
 export interface Command {
     data: { name: string; toJSON: () => unknown };
@@ -52,14 +53,16 @@ async function loadCommands(): Promise<void> {
 async function main(): Promise<void> {
     await loadCommands();
 
-    client.once(Events.ClientReady, (c) => {
+    client.once(Events.ClientReady, async (c) => {
         console.log(`Ready! Logged in as ${c.user.tag}`);
         initDB();
+        await primeWordReactionEmojis(c);
         startGameplayLoops(client);
     });
 
     client.on(Events.MessageCreate, (message) => {
         void handleCatchText(message);
+        void handleWordReactions(client, message);
     });
 
     client.on(Events.InteractionCreate, async (interaction) => {
