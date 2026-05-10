@@ -4,13 +4,44 @@ import { profiles } from "../db/schema";
 
 export type RarityDef = {
     display: string;
-    /** filename prefix under assets/images/spawn: `{fileKey}_cat.png` */
+    /** Spawn image: `assets/images/spawn/${fileKey}.jpg` */
     fileKey: string;
     weight: number;
     color: number;
 };
 
-/** Ordered roughly common → rare (weights). Matches existing spawn art files. */
+type ProfileRow = typeof profiles.$inferSelect;
+
+/**
+ * Profile DB columns mapped 1:1 with `RARITIES` row order (`RARITIES[i]` ↔ `PROFILE_COUNT_SLOTS[i]`).
+ * If you reorder or resize `RARITIES`, keep these lists the same length.
+ */
+export const PROFILE_COUNT_SLOTS = [
+    "countFine",
+    "countNice",
+    "countGood",
+    "countRare",
+    "countWild",
+    "countBaby",
+    "countEpic",
+    "countSus",
+    "countBrave",
+    "countRickroll",
+    "countReverse",
+    "countSuperior",
+    "countTrash",
+    "countLegendary",
+    "countMythic",
+    "count8bit",
+    "countCorrupt",
+    "countProfessor",
+    "countDivine",
+    "countReal",
+    "countUltimate",
+    "countEgirl",
+] as const satisfies ReadonlyArray<keyof ProfileRow>;
+
+/** Ordered roughly common → rare (weights). Matches spawn art filenames (`fileKey`). */
 export const RARITIES: RarityDef[] = [
     { display: "Stylish", fileKey: "stylish", weight: 900, color: 0x6e593c },
     { display: "Sick", fileKey: "sick", weight: 700, color: 0xcccccc },
@@ -36,32 +67,26 @@ export const RARITIES: RarityDef[] = [
     { display: "Weed", fileKey: "weed", weight: 12, color: 0xffc0cb },
 ];
 
-type ProfileRow = typeof profiles.$inferSelect;
+if (RARITIES.length !== PROFILE_COUNT_SLOTS.length) {
+    throw new Error(
+        `rarities.ts: RARITIES.length (${RARITIES.length}) must equal PROFILE_COUNT_SLOTS.length (${PROFILE_COUNT_SLOTS.length}).`,
+    );
+}
 
-const DISPLAY_TO_COUNT: Record<string, keyof ProfileRow> = {
-    Fine: "countFine",
-    Nice: "countNice",
-    Good: "countGood",
-    Rare: "countRare",
-    Wild: "countWild",
-    Baby: "countBaby",
-    Epic: "countEpic",
-    Sus: "countSus",
-    Brave: "countBrave",
-    Rickroll: "countRickroll",
-    Reverse: "countReverse",
-    Superior: "countSuperior",
-    Trash: "countTrash",
-    Legendary: "countLegendary",
-    Mythic: "countMythic",
-    "8bit": "count8bit",
-    Corrupt: "countCorrupt",
-    Professor: "countProfessor",
-    Divine: "countDivine",
-    Real: "countReal",
-    Ultimate: "countUltimate",
-    eGirl: "countEgirl",
-};
+/** Maps each spawn `display` string → profiles count column key. */
+export const DISPLAY_TO_COUNT: Record<string, keyof ProfileRow> = Object.fromEntries(
+    RARITIES.map((r, i) => [r.display, PROFILE_COUNT_SLOTS[i]!]),
+) as Record<string, keyof ProfileRow>;
+
+export function raritySlotDisplay(slot: keyof ProfileRow): string | undefined {
+    const idx = PROFILE_COUNT_SLOTS.indexOf(slot as (typeof PROFILE_COUNT_SLOTS)[number]);
+    return idx >= 0 ? RARITIES[idx]!.display : undefined;
+}
+
+export function isTrashSlot(r: RarityDef): boolean {
+    const i = RARITIES.findIndex((x) => x.display === r.display);
+    return i >= 0 ? PROFILE_COUNT_SLOTS[i] === "countTrash" : false;
+}
 
 export function rollRarity(): RarityDef {
     const total = RARITIES.reduce((s, r) => s + r.weight, 0);
@@ -77,14 +102,14 @@ export function resolveSpawnImagePath(fileKey: string): string {
     const root = process.cwd();
     const primary = path.join(root, "assets/images/spawn", `${fileKey}.jpg`);
     if (existsSync(primary)) return primary;
-    const fine = path.join(root, "assets/images/spawn", "fine_cat.png");
-    if (existsSync(fine)) return fine;
+    const first = RARITIES[0] && path.join(root, "assets/images/spawn", `${RARITIES[0].fileKey}.jpg`);
+    if (first && existsSync(first)) return first;
     return path.join(root, "assets/images/cat.png");
 }
 
-/** Trash tier sometimes uses the containment art for variety */
+/** “Trash” stat slot sometimes uses alternate art (if file exists). */
 export function spawnImagePathForRarity(r: RarityDef): string {
-    if (r.display === "Trash" && Math.random() < 0.35) {
+    if (isTrashSlot(r) && Math.random() < 0.35) {
         const alt = path.join(process.cwd(), "assets/images/spawn/thetrashcell_cat.png");
         if (existsSync(alt)) return alt;
     }
@@ -93,4 +118,17 @@ export function spawnImagePathForRarity(r: RarityDef): string {
 
 export function profileCountKey(display: string): keyof ProfileRow | undefined {
     return DISPLAY_TO_COUNT[display];
+}
+
+export function isSusSlot(display: string): boolean {
+    return profileCountKey(display) === "countSus";
+}
+
+export function isMythicSlot(display: string): boolean {
+    return profileCountKey(display) === "countMythic";
+}
+
+export function isShinySlot(display: string): boolean {
+    const k = profileCountKey(display);
+    return k === "countLegendary" || k === "countDivine" || k === "countUltimate";
 }

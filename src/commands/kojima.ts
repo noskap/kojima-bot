@@ -1,16 +1,30 @@
-import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from "discord.js";
+import { Client, SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from "discord.js";
 import { eq } from "drizzle-orm";
 import type { Command } from "../index";
 import { db } from "../db";
 import { channels, profiles } from "../db/schema";
 import { CONFIG } from "../config";
+import { RARITIES } from "../lib/rarities";
 import { getOrCreateProfile, guildLeaderboard } from "../lib/game-db";
+import { forceSpawnNow } from "../services/gameplay";
 import { listUnlockedAchievements, processGiftAchievements, totalAchievementCount } from "../lib/achievements";
 
 const command: Command = {
     data: new SlashCommandBuilder()
         .setName("kojima")
         .setDescription("Wild spawn controls & stats")
+        .addSubcommand((sc) =>
+            sc
+                .setName("forcespawn")
+                .setDescription("Post a spawn immediately (optional type; clears an active spawn)")
+                .addStringOption((o) => {
+                    const opt = o
+                        .setName("type")
+                        .setDescription("Spawn this type, or random if omitted")
+                        .setRequired(false);
+                    return opt.addChoices(...RARITIES.slice(0, 25).map((r) => ({ name: r.display, value: r.display })));
+                }),
+        )
         .addSubcommand((sc) => sc.setName("setup").setDescription("Enable random spawns in this text channel"))
         .addSubcommand((sc) => sc.setName("stop").setDescription("Disable spawns in this channel"))
         .addSubcommand((sc) =>
@@ -60,7 +74,7 @@ const command: Command = {
         const sub = interaction.options.getSubcommand();
         const canManage = interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels);
 
-        if (["setup", "stop", "interval"].includes(sub) && !canManage) {
+        if (["setup", "stop", "interval", "forcespawn"].includes(sub) && !canManage) {
             await interaction.reply({
                 content: "You need **Manage Channels** for that.",
                 ephemeral: true,
@@ -70,6 +84,27 @@ const command: Command = {
 
         const channelId = interaction.channelId;
         const nowSec = Math.floor(Date.now() / 1000);
+
+        if (sub === "forcespawn") {
+            const typePick = interaction.options.getString("type");
+            const forced = typePick ? RARITIES.find((r) => r.display === typePick) : undefined;
+            if (typePick && !forced) {
+                await interaction.reply({ content: "That type isn’t in the rarity list.", ephemeral: true });
+                return;
+            }
+            await interaction.deferReply({ ephemeral: true });
+            const res = await forceSpawnNow(interaction.client as Client, interaction.guildId, channelId, forced);
+            if (!res.ok) {
+                await interaction.editReply(res.reason);
+                return;
+            }
+            await interaction.editReply(
+                forced
+                    ? `Spawned **${forced.display}** ${CONFIG.ENTITY_NAME}.`
+                    : `Posted a random **${CONFIG.ENTITY_NAME}** spawn.`,
+            );
+            return;
+        }
 
         if (sub === "setup") {
             await db

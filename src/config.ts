@@ -15,21 +15,6 @@ export const CONFIG = {
   DB_FILE: "bot.sqlite",
 };
 
-export const ASSETS = {
-  FONTS: {
-    // Relative to the project root when running
-    MAIN: "./assets/fonts/whitneysemibold.otf", 
-    SECONDARY: "./assets/fonts/ggsans-Medium.ttf",
-  },
-  IMAGES: {
-    CATCH_BG: "./assets/images/catch_bg.png", // User needs to provide this or we use default logic
-    // Add more as needed
-  },
-  AUDIO: {
-      BWOMP: "./assets/audio/bwomp.mp3"
-  }
-};
-
 // Validate critical config
 if (!CONFIG.TOKEN) {
   throw new Error("Missing DISCORD_TOKEN in .env");

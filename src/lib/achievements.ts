@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { achievementUnlocks, profiles } from "../db/schema";
+import { isMythicSlot, isShinySlot, isSusSlot } from "./rarities";
 
 export type ProfileRow = typeof profiles.$inferSelect;
 
@@ -13,9 +14,9 @@ export const ACHIEVEMENT_CATALOG: Record<string, Omit<AchievementInfo, "key">> =
     glacier: { title: "Glacier Hands", description: "Catch something that took over a minute." },
     collector: { title: "Collector", description: "Reach 25 total catches in this server." },
     hoarder: { title: "Hoarder", description: "Reach 100 total catches in this server." },
-    mythic_touch: { title: "Touched Grass (Mythic)", description: "Catch a Mythic rarity." },
-    shiny_hunter: { title: "Shiny Hunter", description: "Catch Legendary, Divine, or Ultimate." },
-    sus_moment: { title: "Sus Moment", description: "Catch a Sus spawn." },
+    mythic_touch: { title: "Mythic-slot", description: "Catch the type mapped to the `countMythic` column (see `PROFILE_COUNT_SLOTS`)." },
+    shiny_hunter: { title: "Shiny Hunter", description: "Catch a type mapped to `countLegendary`, `countDivine`, or `countUltimate`." },
+    sus_moment: { title: "Sus-slot", description: "Catch the type mapped to the `countSus` column." },
     variety_pack: { title: "Variety Pack", description: "Have at least 8 different rarity types on your sheet." },
     generous: { title: "Generous", description: "Send 5 gifts." },
     popular: { title: "Popular", description: "Receive 5 gifts." },
@@ -130,9 +131,9 @@ export async function processCatchAchievements(
     if (catchSeconds > 60) await push("glacier");
     if ((profile.totalCatches ?? 0) >= 25) await push("collector");
     if ((profile.totalCatches ?? 0) >= 100) await push("hoarder");
-    if (rarityDisplay === "Mythic") await push("mythic_touch");
-    if (["Legendary", "Divine", "Ultimate"].includes(rarityDisplay)) await push("shiny_hunter");
-    if (rarityDisplay === "Sus") await push("sus_moment");
+    if (isMythicSlot(rarityDisplay)) await push("mythic_touch");
+    if (isShinySlot(rarityDisplay)) await push("shiny_hunter");
+    if (isSusSlot(rarityDisplay)) await push("sus_moment");
     if (rarityVarietyCount(profile) >= 8) await push("variety_pack");
 
     return unlocked;

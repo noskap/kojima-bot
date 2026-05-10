@@ -17,11 +17,17 @@ import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { channels, profiles } from "../db/schema";
 import { CONFIG } from "../config";
-import { rollRarity, spawnImagePathForRarity, profileCountKey, type RarityDef, RARITIES } from "../lib/rarities";
+import {
+    rollRarity,
+    spawnImagePathForRarity,
+    profileCountKey,
+    isSusSlot,
+    type RarityDef,
+    RARITIES,
+} from "../lib/rarities";
 import { randomCelebrationQuote } from "../lib/quotes";
 import { getOrCreateProfile, upsertUsername } from "../lib/game-db";
 import { processCatchAchievements } from "../lib/achievements";
-import { generateCatchImage } from "../utils/image-gen";
 
 const processingSpawnIds = new Set<string>();
 
@@ -110,7 +116,7 @@ export async function tickSpawns(client: Client): Promise<void> {
         if (!guild) continue;
 
         try {
-            await postSpawn(client, chRow.guildId, chRow.id);
+            await postSpawn(client, chRow.guildId, chRow.id, {});
         } catch (e) {
             const code = apiErrorCode(e);
             if (code === 50001 || code === 50013) {
@@ -122,12 +128,15 @@ export async function tickSpawns(client: Client): Promise<void> {
     }
 }
 
-async function postSpawn(client: Client, guildId: string, channelId: string): Promise<void> {
+type PostSpawnOpts = { forcedRarity?: RarityDef };
+
+/** @returns whether a spawn message was posted and DB updated */
+async function postSpawn(client: Client, guildId: string, channelId: string, opts: PostSpawnOpts): Promise<boolean> {
     const guild = client.guilds.cache.get(guildId);
-    if (!guild) return;
+    if (!guild) return false;
 
     const raw = await guild.channels.fetch(channelId).catch(() => null);
-    if (!raw?.isTextBased() || raw.isDMBased()) return;
+    if (!raw?.isTextBased() || raw.isDMBased()) return false;
     const textChannel = raw as TextChannel;
 
     const me = guild.members.me;
@@ -142,11 +151,11 @@ async function postSpawn(client: Client, guildId: string, channelId: string): Pr
                 channelId,
                 "Bot lacks permission to post embeds + files here (check View Channel, Send Messages, Attach Files, Embed Links, and in threads: Send in Threads).",
             );
-            return;
+            return false;
         }
     }
 
-    const rarity = rollRarity();
+    const rarity = opts.forcedRarity ?? rollRarity();
     const imgPath = spawnImagePathForRarity(rarity);
     const buffer = readFileSync(imgPath);
     const attachment = new AttachmentBuilder(buffer, { name: "spawn.png" });
@@ -184,6 +193,57 @@ async function postSpawn(client: Client, guildId: string, channelId: string): Pr
         .run();
 
     accessDeniedLogged.delete(channelId);
+    return true;
+}
+
+export type ForceSpawnResult = { ok: true } | { ok: false; reason: string };
+
+/** Clear any active spawn in DB/Discord, then post one immediately (used by `/kojima forcespawn`). */
+export async function forceSpawnNow(
+    client: Client,
+    guildId: string,
+    channelId: string,
+    forcedRarity?: RarityDef,
+): Promise<ForceSpawnResult> {
+    const row = await db.select().from(channels).where(eq(channels.id, channelId)).get();
+    if (!row?.guildId) {
+        return { ok: false, reason: "This channel is not set up. Run `/kojima setup` first." };
+    }
+    if (row.guildId !== guildId) {
+        return { ok: false, reason: "Channel data mismatch — try `/kojima setup` again." };
+    }
+
+    if (row.cat && row.cat !== "0") {
+        const guild = await client.guilds.fetch(guildId).catch(() => null);
+        const raw = guild ? await guild.channels.fetch(channelId).catch(() => null) : null;
+        if (raw?.isTextBased() && !raw.isDMBased()) {
+            const msg = await raw.messages.fetch(row.cat).catch(() => null);
+            await msg?.delete().catch(() => {});
+        }
+    }
+
+    await db
+        .update(channels)
+        .set({ cat: "0", yetToSpawn: 0 })
+        .where(eq(channels.id, channelId))
+        .run();
+
+    try {
+        const posted = await postSpawn(client, guildId, channelId, { forcedRarity });
+        if (!posted) {
+            return { ok: false, reason: "Could not post (bot needs View/Send/Embed/Attach in this channel)." };
+        }
+    } catch (e) {
+        const code = apiErrorCode(e);
+        if (code === 50001 || code === 50013) {
+            await backoffSpawnRetry(channelId, "Discord blocked posting when forcing spawn.");
+        } else {
+            console.error("[forcespawn]", e);
+        }
+        return { ok: false, reason: "Could not post the spawn (permissions or network). Check bot channel access." };
+    }
+
+    return { ok: true };
 }
 
 export async function handleCatchButton(interaction: ButtonInteraction): Promise<void> {
@@ -290,7 +350,7 @@ async function executeCatch(opts: {
             return;
         }
 
-        const rarityDisplay = fresh.catType || "Fine";
+        const rarityDisplay = fresh.catType || RARITIES[0]!.display;
         const rarityMeta = rarityByDisplay(rarityDisplay);
 
         const catchEndMs = interaction?.createdTimestamp ?? sourceMessage?.createdTimestamp ?? Date.now();
@@ -358,28 +418,13 @@ async function executeCatch(opts: {
         const quote = randomCelebrationQuote(CONFIG.ENTITY_NAME);
         const timeStr = formatCatchDuration(catchSeconds);
 
-        const fakeMsg: Pick<Message, "author" | "content" | "cleanContent" | "createdTimestamp"> & {
-            member?: GuildMember | null;
-            guild?: Message["guild"];
-        } = {
-            author: user,
-            content: quote,
-            cleanContent: quote,
-            createdTimestamp: Date.now(),
-            member: member ?? undefined,
-            guild: spawnMessage.guild ?? undefined,
-        };
-
-        const catchImage = await generateCatchImage(fakeMsg as Message, member ?? user);
-
         const celebrate = new EmbedBuilder()
             .setTitle(`${rarityMeta.display} ${CONFIG.ENTITY_NAME} caught!`)
             .setDescription(
                 `**${displayName}** got it in **${timeStr}**!\n\n${quote}` +
-                    (rarityDisplay === "Sus" && Math.random() < 0.15 ? "\n\n_Not suspicious at all._" : ""),
+                    (isSusSlot(rarityDisplay) && Math.random() < 0.15 ? "\n\n_Not suspicious at all._" : ""),
             )
             .setColor(rarityMeta.color)
-            .setImage("attachment://catch.png")
             .setFooter({ text: `Your catches (this server): ${prevTotal + 1}` });
 
         if (newAchievements?.length) {
@@ -393,7 +438,6 @@ async function executeCatch(opts: {
         if (textCh.isTextBased() && !textCh.isDMBased()) {
             await textCh.send({
                 embeds: [celebrate],
-                files: [catchImage],
                 allowedMentions: { users: [user.id] },
             });
         }
