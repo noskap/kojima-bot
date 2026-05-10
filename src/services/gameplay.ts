@@ -7,6 +7,7 @@ import {
     EmbedBuilder,
     ButtonInteraction,
     Message,
+    PermissionFlagsBits,
     TextChannel,
     User,
     GuildMember,
@@ -24,7 +25,41 @@ import { generateCatchImage } from "../utils/image-gen";
 
 const processingSpawnIds = new Set<string>();
 
+/** Avoid repeating the same permission wall-of-text every tick */
+const accessDeniedLogged = new Set<string>();
+
 const pointLaughWindow = new Map<string, { count: number; windowStart: number }>();
+
+function apiErrorCode(e: unknown): number | undefined {
+    if (e && typeof e === "object" && "code" in e && typeof (e as { code: unknown }).code === "number") {
+        return (e as { code: number }).code;
+    }
+    return undefined;
+}
+
+const SPAWN_NEED =
+    PermissionFlagsBits.ViewChannel |
+    PermissionFlagsBits.SendMessages |
+    PermissionFlagsBits.AttachFiles |
+    PermissionFlagsBits.EmbedLinks;
+
+async function backoffSpawnRetry(channelId: string, humanReason: string): Promise<void> {
+    const nowSec = Math.floor(Date.now() / 1000);
+    await db
+        .update(channels)
+        .set({ yetToSpawn: nowSec + 600 })
+        .where(eq(channels.id, channelId))
+        .run();
+    if (!accessDeniedLogged.has(channelId)) {
+        accessDeniedLogged.add(channelId);
+        console.warn(
+            `[spawn] channel ${channelId}: ${humanReason}\n` +
+                `  → Grant this bot **View Channel**, **Send Messages**, **Embed Links**, **Attach Files** (and in threads: **Send Messages in Threads** if relevant).\n` +
+                `  → Server Settings → **Channels** / **Roles** → find the channel or bot role → enable those permissions.\n` +
+                `  Retrying in ~10 minutes (or restart the bot after fixing).`,
+        );
+    }
+}
 
 function allowPointLaugh(channelId: string): boolean {
     const now = Date.now();
@@ -77,7 +112,12 @@ export async function tickSpawns(client: Client): Promise<void> {
         try {
             await postSpawn(client, chRow.guildId, chRow.id);
         } catch (e) {
-            console.error(`[spawn] failed channel ${chRow.id}:`, e);
+            const code = apiErrorCode(e);
+            if (code === 50001 || code === 50013) {
+                await backoffSpawnRetry(chRow.id, `Discord blocked posting (${code === 50001 ? "Missing Access" : "Missing Permissions"}).`);
+            } else {
+                console.error(`[spawn] failed channel ${chRow.id}:`, e);
+            }
         }
     }
 }
@@ -89,6 +129,22 @@ async function postSpawn(client: Client, guildId: string, channelId: string): Pr
     const raw = await guild.channels.fetch(channelId).catch(() => null);
     if (!raw?.isTextBased() || raw.isDMBased()) return;
     const textChannel = raw as TextChannel;
+
+    const me = guild.members.me;
+    if (me) {
+        const perms = textChannel.permissionsFor(me);
+        let need = SPAWN_NEED;
+        if ("isThread" in raw && raw.isThread()) {
+            need |= PermissionFlagsBits.SendMessagesInThreads;
+        }
+        if (!perms?.has(need)) {
+            await backoffSpawnRetry(
+                channelId,
+                "Bot lacks permission to post embeds + files here (check View Channel, Send Messages, Attach Files, Embed Links, and in threads: Send in Threads).",
+            );
+            return;
+        }
+    }
 
     const rarity = rollRarity();
     const imgPath = spawnImagePathForRarity(rarity);
@@ -126,6 +182,8 @@ async function postSpawn(client: Client, guildId: string, channelId: string): Pr
         })
         .where(eq(channels.id, channelId))
         .run();
+
+    accessDeniedLogged.delete(channelId);
 }
 
 export async function handleCatchButton(interaction: ButtonInteraction): Promise<void> {

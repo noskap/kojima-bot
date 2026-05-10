@@ -67,6 +67,12 @@ This project includes an `ecosystem.config.js` for easy deployment with PM2.
     pm2 logs kojima-bot
     ```
 
+## Troubleshooting (database)
+
+If you see **`no column named ...`** errors, your `bot.sqlite` was created from an older schema. The bot now **auto-adds** common missing columns on startup.
+
+If problems continue: stop the bot, **delete `bot.sqlite`** in the project root, run **`bun run db:push`**, then start again. (You’ll lose local stats.)
+
 ## Customization
 - **Re-skinning**: Change `ENTITY_NAME` in `.env`.
 - **Assets**: Replace images in `assets/images/`.
