@@ -1,0 +1,3 @@
+[submodule "colonel"]
+	path = colonel
+	url = https://github.com/noskap/colonel-gw

@@ -1,47 +1,82 @@
-# ![Cat Bot PFP](https://wsrv.nl/?url=raw.githubusercontent.com/milenakos/cat-bot/main/images/cat.png&h=25) Cat Bot [![top.gg](https://top.gg/api/widget/servers/966695034340663367.svg?noavatar=true)](https://top.gg/bot/966695034340663367) [![Discord Server](https://img.shields.io/discord/966586000417619998?label=discord&logo=discord)](https://discord.gg/cat-stand-966586000417619998) [![Wiki](https://img.shields.io/badge/Wiki-blue?label=Cat%20Bot&logo=wiki.js)](https://wiki.minkos.lol)
+# Kojima Bot
 
-Discord Cat Bot Source Code
+A Discord bot about catching things... rebuilt in Bun!
 
-# Development
+## Features
+- **Random spawns**: Opt a channel in with `/kojima setup`; wild entities appear on a timer with rarity-weighted art from `assets/images/spawn/`.
+- **Catch**: Type your catch phrase (see `CATCH_TRIGGER` / `ENTITY_NAME`) **or** press the **Catch** button on the spawn card — first player wins.
+- **Slash commands**: `/kojima` (setup, spacing, last catch, leaderboard, **gift**, **achievements**), `/profile`, `/ping`, **`/gamble`** (slots, coin flip, roulette + chip balance).
+- **Achievements**: Unlock milestones from catches, gifts, and casino play — see `/kojima achievements`.
+- **Customizable**: Rename the entity via `ENTITY_NAME`, swap spawn PNGs, tune fonts in `src/config.ts`.
+- **Fast**: [Bun](https://bun.sh) + SQLite (Drizzle).
 
-Please note that self-hosting is hacky and isn't supported; instructions below are for testing/development/messing around. I won't stop you, but you WILL have to mess around with the code a bunch for it to work good, so be warned.
+## Setup
 
-## Prerequisites
+### Prerequisites
+- [Bun](https://bun.sh) installed.
 
-- Python 3 (around 3.8 or so, newer is better ofc)
-- PostgreSQL
-- Git (optional)
+### Installation
+1.  Clone the repository.
+2.  Install dependencies:
+    ```bash
+    bun install
+    ```
+3.  Configure Environment:
+    ```bash
+    cp .env.example .env
+    ```
+    Edit `.env` — see **`.env.example`** for all variables.
 
-## Instructions
+    Required: **`DISCORD_TOKEN`**, **`CLIENT_ID`**, **`GUILD_ID`**.
 
-1. Clone the repository. You can use the green "Code" button at the top or a git command:
+    Common optional knobs: **`ENTITY_NAME`**, **`CATCH_TRIGGER`**, **`LINK_FIXUP_X`**, **`LINK_FIXUP_INSTAGRAM`** (mirror x.com / instagram for embeds — needs **Manage Messages** + **Send Messages** in that channel).
 
-   ```shell
-   git clone https://github.com/milenakos/cat-bot.git
-   ```
+### Running the Bot
 
-3. Install requirements:
+**Development Mode** (auto-restarts):
+```bash
+bun run dev
+```
 
-   ```shell
-   pip install -r requirements.txt
-   ```
+**Production Mode**:
+```bash
+bun start
+```
 
-   If you are running a Gateway Proxy, do `pip install -r requirements-gw.txt` instead. This uses a custom fork which contacts `localhost:7878` instead and removes ratelimits and heartbeats.
+**Slash Commands** (guild-scoped; uses `GUILD_ID` in `.env`):
+```bash
+bun run deploy
+```
 
-4. You will need to add all emojis you want to Discord's App Emoji in the Dev Portal.
+In Discord (requires **Manage Channels** where noted):
+1. Run `/kojima setup` in the channel where you want spawns.
+2. Wait for a spawn; reply with your catch phrase or click **Catch**.
+3. Tune timing with `/kojima interval` (min/max seconds between spawns after each catch).
 
-   If they aren't found there, they will be replaced with a placeholder.
+Bot permissions in that channel: **Send Messages**, **Attach Files**, **Embed Links**, **Read Message History** (recommended), **Add Reactions** (optional, for “nice try” 😂 when someone mistypes early). If **`LINK_FIXUP_*`** env flags are enabled, also grant **Manage Messages** there so the bot can delete and repost link messages.
 
-   All emojis can be downloaded [here](https://github.com/staring-cat/emojis/releases/latest/download/emojis.zip).
+## Deployment (PM2)
+This project includes an `ecosystem.config.js` for easy deployment with PM2.
 
-5. Go inside of the `config.py` file and configure everything to your liking.
+1.  Make sure you have PM2 installed:
+    ```bash
+    bun add -g pm2
+    ```
+2.  Start the bot:
+    ```bash
+    pm2 start ecosystem.config.js
+    ```
+3.  Monitor:
+    ```bash
+    pm2 logs kojima-bot
+    ```
 
-6. Run the bot with `python bot.py`.
+## Troubleshooting (database)
 
-7. Done!
+If you see **`no column named ...`** errors, your `bot.sqlite` was created from an older schema. The bot now **auto-adds** common missing columns on startup.
 
-# License
+If problems continue: stop the bot, **delete `bot.sqlite`** in the project root, run **`bun run db:push`**, then start again. (You’ll lose local stats.)
 
-Cat Bot is licensed under GNU Affero General Public License v3.0 license. View `LICENSE` for more information.
-
-CatPG, our custom-made `asyncpg` wrapper, is licensed under MIT License instead. The license text is present in the beginning of `catpg.py` file.
+## Customization
+- **Re-skinning**: Change `ENTITY_NAME` in `.env`.
+- **Assets**: Replace images in `assets/images/`.
