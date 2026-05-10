@@ -12,28 +12,28 @@ export type RarityDef = {
 
 /** Ordered roughly common → rare (weights). Matches existing spawn art files. */
 export const RARITIES: RarityDef[] = [
-    { display: "Fine", fileKey: "fine", weight: 900, color: 0x6e593c },
-    { display: "Nice", fileKey: "nice", weight: 700, color: 0xcccccc },
-    { display: "Good", fileKey: "good", weight: 550, color: 0x007f0e },
-    { display: "Rare", fileKey: "rare", weight: 400, color: 0xffff00 },
-    { display: "Wild", fileKey: "wild", weight: 320, color: 0x750f0e },
-    { display: "Baby", fileKey: "baby", weight: 260, color: 0xc12929 },
-    { display: "Trash", fileKey: "trash", weight: 220, color: 0x555555 },
-    { display: "Brave", fileKey: "brave", weight: 200, color: 0xff8c00 },
-    { display: "Sus", fileKey: "sus", weight: 180, color: 0xff0000 },
-    { display: "Rickroll", fileKey: "rickroll", weight: 150, color: 0xff69b4 },
-    { display: "Reverse", fileKey: "reverse", weight: 140, color: 0x9400d3 },
-    { display: "8bit", fileKey: "8bit", weight: 130, color: 0x00ced1 },
-    { display: "Superior", fileKey: "superior", weight: 110, color: 0xc0c0c0 },
-    { display: "Corrupt", fileKey: "corrupt", weight: 95, color: 0x2f4f4f },
-    { display: "Epic", fileKey: "epic", weight: 85, color: 0xff81c6 },
-    { display: "Professor", fileKey: "professor", weight: 75, color: 0x8b4513 },
-    { display: "Legendary", fileKey: "legendary", weight: 45, color: 0xff0000 },
-    { display: "Real", fileKey: "real", weight: 40, color: 0x228b22 },
-    { display: "Divine", fileKey: "divine", weight: 30, color: 0xffd700 },
-    { display: "Ultimate", fileKey: "ultimate", weight: 25, color: 0x9400d3 },
-    { display: "Mythic", fileKey: "mythic", weight: 18, color: 0x8800ff },
-    { display: "eGirl", fileKey: "egirl", weight: 12, color: 0xffc0cb },
+    { display: "Stylish", fileKey: "stylish", weight: 900, color: 0x6e593c },
+    { display: "Sick", fileKey: "sick", weight: 700, color: 0xcccccc },
+    { display: "Matrix", fileKey: "matrix", weight: 550, color: 0x007f0e },
+    { display: "Super", fileKey: "super", weight: 400, color: 0xffff00 },
+    { display: "Drunk", fileKey: "drunk", weight: 320, color: 0x750f0e },
+    { display: "Banana", fileKey: "banana", weight: 260, color: 0xc12929 },
+    { display: "Chicken Hat", fileKey: "chicken_hat", weight: 220, color: 0x555555 },
+    { display: "Disguised", fileKey: "disguised", weight: 200, color: 0xff8c00 },
+    { display: "Crowbar", fileKey: "crowbar", weight: 180, color: 0xff0000 },
+    { display: "Exercise", fileKey: "exercise", weight: 150, color: 0xff69b4 },
+    { display: "Valve", fileKey: "valve", weight: 140, color: 0x9400d3 },
+    { display: "Combat", fileKey: "combat", weight: 130, color: 0x00ced1 },
+    { display: "Mocap", fileKey: "mocap", weight: 110, color: 0xc0c0c0 },
+    { display: "Broken", fileKey: "broken", weight: 95, color: 0x2f4f4f },
+    { display: "Rare", fileKey: "rare", weight: 85, color: 0xff81c6 },
+    { display: "Russian", fileKey: "russian", weight: 75, color: 0x8b4513 },
+    { display: "Porter", fileKey: "porter", weight: 45, color: 0xff0000 },
+    { display: "Alien", fileKey: "alien", weight: 40, color: 0x228b22 },
+    { display: "Sushi", fileKey: "sushi", weight: 30, color: 0xffd700 },
+    { display: "Mexican", fileKey: "mexican", weight: 25, color: 0x9400d3 },
+    { display: "Burger", fileKey: "burger", weight: 18, color: 0x8800ff },
+    { display: "Weed", fileKey: "weed", weight: 12, color: 0xffc0cb },
 ];
 
 type ProfileRow = typeof profiles.$inferSelect;
@@ -75,7 +75,7 @@ export function rollRarity(): RarityDef {
 
 export function resolveSpawnImagePath(fileKey: string): string {
     const root = process.cwd();
-    const primary = path.join(root, "assets/images/spawn", `${fileKey}_cat.png`);
+    const primary = path.join(root, "assets/images/spawn", `${fileKey}.jpg`);
     if (existsSync(primary)) return primary;
     const fine = path.join(root, "assets/images/spawn", "fine_cat.png");
     if (existsSync(fine)) return fine;
