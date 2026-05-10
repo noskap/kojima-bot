@@ -3,9 +3,11 @@
 A Discord bot about catching things... rebuilt in Bun!
 
 ## Features
-- **Catch Mechanics**: Catch varied-rarity entities (Cats, Gnomes, whatever you want!).
-- **Customizable**: Change the entity name and assets easily.
-- **Fast**: Powered by [Bun](https://bun.sh) and SQLite.
+- **Random spawns**: Opt a channel in with `/kojima setup`; wild entities appear on a timer with rarity-weighted art from `assets/images/spawn/`.
+- **Catch**: Type your catch phrase (see `CATCH_TRIGGER` / `ENTITY_NAME`) **or** press the **Catch** button on the spawn card — first player wins.
+- **Slash commands**: `/kojima` (setup, spacing, last catch, leaderboard), `/profile`, `/ping`.
+- **Customizable**: Rename the entity via `ENTITY_NAME`, swap spawn PNGs, tune fonts in `src/config.ts`.
+- **Fast**: [Bun](https://bun.sh) + SQLite (Drizzle).
 
 ## Setup
 
@@ -36,11 +38,17 @@ bun run dev
 bun start
 ```
 
-**Slash Commands**:
-If you change commands, update them on Discord:
+**Slash Commands** (guild-scoped; uses `GUILD_ID` in `.env`):
 ```bash
 bun run deploy
 ```
+
+In Discord (requires **Manage Channels** where noted):
+1. Run `/kojima setup` in the channel where you want spawns.
+2. Wait for a spawn; reply with your catch phrase or click **Catch**.
+3. Tune timing with `/kojima interval` (min/max seconds between spawns after each catch).
+
+Bot permissions in that channel: **Send Messages**, **Attach Files**, **Embed Links**, **Read Message History** (recommended), **Add Reactions** (optional, for “nice try” 😂 when someone mistypes early).
 
 ## Deployment (PM2)
 This project includes an `ecosystem.config.js` for easy deployment with PM2.

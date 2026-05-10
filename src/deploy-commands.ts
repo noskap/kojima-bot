@@ -1,24 +1,31 @@
 import { REST, Routes } from "discord.js";
-import { CONFIG } from "./config";
 import fs from "fs";
 import path from "path";
+import { pathToFileURL } from "node:url";
+import { CONFIG } from "./config";
 
-const commands = [];
+const commands: unknown[] = [];
 const commandsPath = path.join(__dirname, "commands");
-// Supports .ts (running with bun) and .js
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith(".ts") || file.endsWith(".js"));
 
-// Using top-level await (Bun supports it)
-async function deploy() {
+async function deploy(): Promise<void> {
+    if (!CONFIG.CLIENT_ID || !CONFIG.GUILD_ID) {
+        console.error("Set CLIENT_ID and GUILD_ID in .env before deploying slash commands.");
+        process.exit(1);
+    }
+
+    const commandFiles = fs.readdirSync(commandsPath).filter((file) => {
+        if (file === "index.ts") return false;
+        return file.endsWith(".ts") || file.endsWith(".js");
+    });
+
     for (const file of commandFiles) {
-        if (file === "index.ts") continue;
         const filePath = path.join(commandsPath, file);
-        const commandModule = await import(filePath);
+        const commandModule = await import(pathToFileURL(filePath).href);
         const command = commandModule.default;
-        if ('data' in command && 'execute' in command) {
+        if (command?.data && command.execute) {
             commands.push(command.data.toJSON());
         } else {
-            console.warn(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+            console.warn(`[WARNING] Skipping ${filePath} — missing "data" or "execute".`);
         }
     }
 
@@ -27,16 +34,15 @@ async function deploy() {
     try {
         console.log(`Started refreshing ${commands.length} application (/) commands.`);
 
-        // Deploy to single guild (faster update)
-        const data = await rest.put(
-            Routes.applicationGuildCommands(CONFIG.CLIENT_ID, CONFIG.GUILD_ID),
-            { body: commands },
-        );
+        const data = (await rest.put(Routes.applicationGuildCommands(CONFIG.CLIENT_ID, CONFIG.GUILD_ID), {
+            body: commands,
+        })) as unknown[];
 
         console.log(`Successfully reloaded ${data.length} application (/) commands.`);
     } catch (error) {
         console.error(error);
+        process.exit(1);
     }
 }
 
-deploy();
+void deploy();

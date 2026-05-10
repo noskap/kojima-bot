@@ -1,16 +1,16 @@
-import { Client, GatewayIntentBits, Collection, Events, REST, Routes } from "discord.js";
-import { CONFIG } from "./config";
+import { Client, GatewayIntentBits, Collection, Events } from "discord.js";
 import fs from "fs";
 import path from "path";
-import { db, initDB } from "./db";
+import { pathToFileURL } from "node:url";
+import { CONFIG } from "./config";
+import { initDB } from "./db";
+import { handleCatchButton, handleCatchText, startGameplayLoops } from "./services/gameplay";
 
-// Interface for Commands
 export interface Command {
-    data: any;
-    execute: (interaction: any) => Promise<void>;
+    data: { name: string; toJSON: () => unknown };
+    execute: (interaction: import("discord.js").ChatInputCommandInteraction) => Promise<void>;
 }
 
-// Extend Client to include commands
 class BotClient extends Client {
     commands: Collection<string, Command>;
 
@@ -20,7 +20,7 @@ class BotClient extends Client {
                 GatewayIntentBits.Guilds,
                 GatewayIntentBits.GuildMessages,
                 GatewayIntentBits.MessageContent,
-            ]
+            ],
         });
         this.commands = new Collection();
     }
@@ -28,48 +28,68 @@ class BotClient extends Client {
 
 const client = new BotClient();
 
-// Load Commands
 const commandsPath = path.join(__dirname, "commands");
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith(".ts") || file.endsWith(".js"));
 
-for (const file of commandFiles) {
-    if (file === "index.ts") continue; // Skip index if present
-    const filePath = path.join(commandsPath, file);
-    import(filePath).then(commandModule => {
-        const command = commandModule.default;
-        if ('data' in command && 'execute' in command) {
-            client.commands.set(command.data.name, command);
-        } else {
-            console.warn(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
-        }
+async function loadCommands(): Promise<void> {
+    const commandFiles = fs.readdirSync(commandsPath).filter((file) => {
+        if (file === "index.ts") return false;
+        return file.endsWith(".ts") || file.endsWith(".js");
     });
+
+    for (const file of commandFiles) {
+        const filePath = path.join(commandsPath, file);
+        const commandModule = await import(pathToFileURL(filePath).href);
+        const command = commandModule.default as Command | undefined;
+        if (command?.data && command.execute) {
+            client.commands.set(command.data.name, command);
+            console.log(`Loaded command: ${command.data.name}`);
+        } else {
+            console.warn(`[WARNING] Skipping ${filePath} — missing "data" or "execute".`);
+        }
+    }
 }
 
-client.once(Events.ClientReady, c => {
-    console.log(`Ready! Logged in as ${c.user.tag}`);
-    initDB();
-});
+async function main(): Promise<void> {
+    await loadCommands();
 
-client.on(Events.InteractionCreate, async interaction => {
-    if (!interaction.isChatInputCommand()) return;
+    client.once(Events.ClientReady, (c) => {
+        console.log(`Ready! Logged in as ${c.user.tag}`);
+        initDB();
+        startGameplayLoops(client);
+    });
 
-    const command = (interaction.client as BotClient).commands.get(interaction.commandName);
+    client.on(Events.MessageCreate, (message) => {
+        void handleCatchText(message);
+    });
 
-    if (!command) {
-        console.error(`No command matching ${interaction.commandName} was found.`);
-        return;
-    }
-
-    try {
-        await command.execute(interaction);
-    } catch (error) {
-        console.error(error);
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ content: 'There was an error while executing this command!', ephemeral: true });
-        } else {
-            await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+    client.on(Events.InteractionCreate, async (interaction) => {
+        if (interaction.isButton() && interaction.customId.startsWith("kojima_catch:")) {
+            await handleCatchButton(interaction);
+            return;
         }
-    }
-});
 
-client.login(CONFIG.TOKEN);
+        if (!interaction.isChatInputCommand()) return;
+
+        const cmd = client.commands.get(interaction.commandName);
+        if (!cmd) {
+            console.error(`No command matching ${interaction.commandName}`);
+            return;
+        }
+
+        try {
+            await cmd.execute(interaction);
+        } catch (error) {
+            console.error(error);
+            const payload = { content: "There was an error while executing this command!", ephemeral: true };
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(payload);
+            } else {
+                await interaction.reply(payload);
+            }
+        }
+    });
+
+    await client.login(CONFIG.TOKEN);
+}
+
+void main();

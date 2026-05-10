@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, integer, text, real, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 // --- Users Table ---
@@ -58,6 +58,11 @@ export const channels = sqliteTable("channels", {
     // Rain Event
     catRains: integer("cat_rains").default(0),
     rainShouldEnd: integer("rain_should_end").default(0),
+
+    // Last catch snapshot (for /kojima last), unix seconds in lastCatches
+    lastCatcherId: text("last_catcher_id").default(""),
+    lastCatcherName: text("last_catcher_name").default(""),
+    lastCatchRarity: text("last_catch_rarity").default(""),
 });
 
 // --- Profiles Table ---
@@ -279,7 +284,9 @@ export const profiles = sqliteTable("profiles", {
     bestPigScore: integer("best_pig_score").default(0),
     sphereEasterEgg: integer("sphere_easter_egg").default(0),
     cutscene: integer("cutscene").default(0),
-});
+}, (t) => ({
+    profilesUserGuild: uniqueIndex("profiles_user_guild").on(t.userId, t.guildId),
+}));
 
 // --- Prisms Table ---
 // Boost items created by users
