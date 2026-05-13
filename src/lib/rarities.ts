@@ -4,7 +4,7 @@ import { profiles } from "../db/schema";
 
 export type RarityDef = {
     display: string;
-    /** Spawn image: `assets/images/spawn/${fileKey}.jpg` */
+    /** Spawn image: `assets/images/spawn/${fileKey}.` + `.jpg` | `.png` | … */
     fileKey: string;
     weight: number;
     color: number;
@@ -115,13 +115,24 @@ export function rollRarity(): RarityDef {
     return RARITIES[0];
 }
 
+const SPAWN_IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp"] as const;
+
+function spawnAssetPathIfExists(fileKey: string): string | undefined {
+    const dir = path.join(process.cwd(), "assets/images/spawn");
+    for (const ext of SPAWN_IMAGE_EXTS) {
+        const p = path.join(dir, `${fileKey}${ext}`);
+        if (existsSync(p)) return p;
+    }
+    return undefined;
+}
+
 export function resolveSpawnImagePath(fileKey: string): string {
     const root = process.cwd();
-    const primary = path.join(root, "assets/images/spawn", `${fileKey}.jpg`);
-    if (existsSync(primary)) return primary;
-    const first = RARITIES[0] && path.join(root, "assets/images/spawn", `${RARITIES[0].fileKey}.jpg`);
-    if (first && existsSync(first)) return first;
-    return path.join(root, "assets/images/cat.png");
+    return (
+        spawnAssetPathIfExists(fileKey) ??
+        (RARITIES[0] ? spawnAssetPathIfExists(RARITIES[0].fileKey) : undefined) ??
+        path.join(root, "assets/images/cat.png")
+    );
 }
 
 /** “Trash” stat slot sometimes uses alternate art (if file exists). */
