@@ -9,26 +9,90 @@ export type AchievementInfo = { key: string; title: string; description: string 
 
 /** Catalog of earnable achievements (keys stable for DB). */
 export const ACHIEVEMENT_CATALOG: Record<string, Omit<AchievementInfo, "key">> = {
-    first_catch: { title: "First Contact", description: "Catch your first wild spawn." },
-    speed_demon: { title: "Speed Demon", description: "Catch in under 2 seconds." },
-    glacier: { title: "Glacier Hands", description: "Catch something that took over a minute." },
-    collector: { title: "Collector", description: "Reach 25 total catches in this server." },
-    hoarder: { title: "Hoarder", description: "Reach 100 total catches in this server." },
-    mythic_touch: { title: "Mythic-slot", description: "Catch the type mapped to the `countMythic` column (see `PROFILE_COUNT_SLOTS`)." },
-    shiny_hunter: { title: "Shiny Hunter", description: "Catch a type mapped to `countLegendary`, `countDivine`, or `countUltimate`." },
-    sus_moment: { title: "Sus-slot", description: "Catch the type mapped to the `countSus` column." },
-    variety_pack: { title: "Variety Pack", description: "Have at least 8 different rarity types on your sheet." },
-    generous: { title: "Generous", description: "Send 5 gifts." },
-    popular: { title: "Popular", description: "Receive 5 gifts." },
-    gamble_first: { title: "House Rules", description: "Place any casino bet." },
-    slots_regular: { title: "One-Armed Fan", description: "Spin the slots once." },
-    slots_whale: { title: "Jackpot Energy", description: "Hit a triple diamond on the slots." },
-    roulette_first: { title: "Wheel Tourist", description: "Win a roulette spin." },
-    flip_addict: { title: "Coin Curious", description: "Play coinflip 10 times." },
-    high_roller: { title: "High Roller", description: "Hold at least 5,000 chips at once." },
-    stone_broke: { title: "Floor Chips Only", description: "Reach 0 chips after a loss." },
-    chip_hoarder: { title: "Chip Hoarder", description: "Hold at least 25,000 chips." },
-    completionist: { title: "Achievement Hunter", description: "Unlock 10 different achievements here." },
+    first_catch: {
+        title: "Virtuous Mission",
+        description: "Your first wild catch. Operation starts here.",
+    },
+    speed_demon: {
+        title: "Quick Draw",
+        description: "Caught one in under two seconds.",
+    },
+    glacier: {
+        title: "Kept Them Waiting",
+        description: "Caught one after more than a minute on the board.",
+    },
+    collector: {
+        title: "Mother Base Payroll",
+        description: "25 total catches in this server.",
+    },
+    hoarder: {
+        title: "FOB Veteran",
+        description: "100 total catches in this server.",
+    },
+    diamond_dogs_director: {
+        title: "Diamond Dogs Director",
+        description: "3,000 total catches—max Mother Base roster, no FOB upgrades required.",
+    },
+    mythic_touch: {
+        title: "Rare Breed",
+        description: "Caught a **Rare** spawn.",
+    },
+    shiny_hunter: {
+        title: "S++ Rank Run",
+        description: "Caught **Broken**, **Sushi**, or **Burger**.",
+    },
+    sus_moment: {
+        title: "Cardboard Box",
+        description: "Caught **Disguised**.",
+    },
+    variety_pack: {
+        title: "Non-Lethal Variety",
+        description: "At least eight different spawn types on your profile.",
+    },
+    generous: {
+        title: "Philanthropy, Kind Of",
+        description: "Sent five gifts.",
+    },
+    popular: {
+        title: "Hollywood Superstar",
+        description: "Received five gifts.",
+    },
+    gamble_first: {
+        title: "House Rules",
+        description: "Placed your first casino bet.",
+    },
+    slots_regular: {
+        title: "One-Armed Fan",
+        description: "Spun the slots once.",
+    },
+    slots_whale: {
+        title: "Triple Diamond",
+        description: "Hit triple diamonds on the slots.",
+    },
+    roulette_first: {
+        title: "La Li Lu Le Let It Ride",
+        description: "Won a roulette spin.",
+    },
+    flip_addict: {
+        title: "Revolver Hobbyist",
+        description: "Ten coin flips. Ocelot would call it practice; accountants call it a problem.",
+    },
+    high_roller: {
+        title: "War Economy",
+        description: "Held at least 5,000 chips at once.",
+    },
+    stone_broke: {
+        title: "Miller’s Retirement Fund",
+        description: "Dropped to zero chips after a loss.",
+    },
+    chip_hoarder: {
+        title: "FOXHOUND Expense Account",
+        description: "25,000+ chips. Big Boss would ask where the R&D-line item went.",
+    },
+    completionist: {
+        title: "Mission Info Updated",
+        description: "Unlocked ten different achievements.",
+    },
 };
 
 function rarityVarietyCount(p: ProfileRow): number {
@@ -131,6 +195,7 @@ export async function processCatchAchievements(
     if (catchSeconds > 60) await push("glacier");
     if ((profile.totalCatches ?? 0) >= 25) await push("collector");
     if ((profile.totalCatches ?? 0) >= 100) await push("hoarder");
+    if ((profile.totalCatches ?? 0) >= 3000) await push("diamond_dogs_director");
     if (isMythicSlot(rarityDisplay)) await push("mythic_touch");
     if (isShinySlot(rarityDisplay)) await push("shiny_hunter");
     if (isSusSlot(rarityDisplay)) await push("sus_moment");
