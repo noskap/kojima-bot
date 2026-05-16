@@ -83,11 +83,6 @@ export function raritySlotDisplay(slot: keyof ProfileRow): string | undefined {
     return idx >= 0 ? RARITIES[idx]!.display : undefined;
 }
 
-export function isTrashSlot(r: RarityDef): boolean {
-    const i = RARITIES.findIndex((x) => x.display === r.display);
-    return i >= 0 ? PROFILE_COUNT_SLOTS[i] === "countTrash" : false;
-}
-
 /** Resolve `/forcespawn type:` or `/kojima forcespawn type:` → rarity (exact, case-insensitive display, or fileKey). */
 export function rarityFromTypeOption(raw: string | null | undefined): RarityDef | undefined {
     if (raw == null) return undefined;
@@ -116,32 +111,34 @@ export function rollRarity(): RarityDef {
 }
 
 const SPAWN_IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp"] as const;
+const SPAWN_IMAGE_DIR = path.join(process.cwd(), "assets/images/spawn");
+
+/** Basename stems to try for a rarity `fileKey` (exact name first, then legacy `*_cat`). */
+function spawnImageStems(fileKey: string): string[] {
+    return fileKey.endsWith("_cat") ? [fileKey] : [fileKey, `${fileKey}_cat`];
+}
 
 function spawnAssetPathIfExists(fileKey: string): string | undefined {
-    const dir = path.join(process.cwd(), "assets/images/spawn");
-    for (const ext of SPAWN_IMAGE_EXTS) {
-        const p = path.join(dir, `${fileKey}${ext}`);
-        if (existsSync(p)) return p;
+    for (const stem of spawnImageStems(fileKey)) {
+        for (const ext of SPAWN_IMAGE_EXTS) {
+            const p = path.join(SPAWN_IMAGE_DIR, `${stem}${ext}`);
+            if (existsSync(p)) return p;
+        }
     }
     return undefined;
 }
 
-export function resolveSpawnImagePath(fileKey: string): string {
-    const root = process.cwd();
-    return (
-        spawnAssetPathIfExists(fileKey) ??
-        (RARITIES[0] ? spawnAssetPathIfExists(RARITIES[0].fileKey) : undefined) ??
-        path.join(root, "assets/images/cat.png")
-    );
+export function resolveSpawnImagePath(fileKey: string): string | undefined {
+    return spawnAssetPathIfExists(fileKey);
 }
 
-/** “Trash” stat slot sometimes uses alternate art (if file exists). */
+/** Spawn embed art for a rolled rarity; falls back only when the asset file is missing. */
 export function spawnImagePathForRarity(r: RarityDef): string {
-    if (isTrashSlot(r) && Math.random() < 0.35) {
-        const alt = path.join(process.cwd(), "assets/images/spawn/thetrashcell_cat.png");
-        if (existsSync(alt)) return alt;
-    }
-    return resolveSpawnImagePath(r.fileKey);
+    const resolved =
+        resolveSpawnImagePath(r.fileKey) ??
+        (RARITIES[0] ? resolveSpawnImagePath(RARITIES[0].fileKey) : undefined);
+    if (resolved) return resolved;
+    return path.join(process.cwd(), "assets/images/cat.png");
 }
 
 export function profileCountKey(display: string): keyof ProfileRow | undefined {
