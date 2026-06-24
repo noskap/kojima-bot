@@ -29,7 +29,69 @@ A Discord bot about catching things... rebuilt in Bun!
 
     Required: **`DISCORD_TOKEN`**, **`CLIENT_ID`**, **`GUILD_ID`**.
 
-    Common optional knobs: **`ENTITY_NAME`**, **`CATCH_TRIGGER`**, **`LINK_FIXUP_X`**, **`LINK_FIXUP_INSTAGRAM`** (mirror x.com / instagram for embeds — needs **Manage Messages** + **Send Messages** in that channel).
+    Common optional knobs: **`ENTITY_NAME`**, **`CATCH_TRIGGER`**, **`LINK_FIXUP_X`**, **`LINK_FIXUP_INSTAGRAM`**, **`LINK_FIXUP_TIKTOK`** (mirror social URLs for embeds — see [Discord permissions](#discord-permissions)).
+
+### Discord permissions
+
+Configure these in the [Discord Developer Portal](https://discord.com/developers/applications) for your application.
+
+#### Privileged intents
+
+Under **Bot** → **Privileged Gateway Intents**, enable:
+
+| Intent | Required | Why |
+|--------|----------|-----|
+| **Message Content** | Yes | Catch phrase detection, link fixup, keyword reactions |
+
+The bot also uses the **Guilds** and **Guild Messages** intents (non-privileged; enabled by default).
+
+#### OAuth2 invite (scopes)
+
+When generating an invite URL (**OAuth2** → **URL Generator**), select:
+
+- **`bot`**
+- **`applications.commands`**
+
+#### Bot permissions (invite URL)
+
+Grant these **Bot Permissions** on the invite. Use the checklist below when adding the bot to a server.
+
+**Required (core bot)**
+
+| Permission | Used for |
+|------------|----------|
+| **View Channels** | See channels where spawns and commands run |
+| **Send Messages** | Spawns, slash replies, link-fixup replies |
+| **Embed Links** | Spawn cards and rich command output |
+| **Attach Files** | Spawn images |
+| **Read Message History** | Resolving active spawn messages on catch / cleanup |
+
+**Recommended**
+
+| Permission | Used for |
+|------------|----------|
+| **Add Reactions** | “Nice try” 😂 on early mistypes; keyword-triggered app emoji reactions |
+| **Send Messages in Threads** | Spawns and catches inside threads |
+
+**Optional (link fixup)**
+
+Only needed in channels where **`LINK_FIXUP_X`**, **`LINK_FIXUP_INSTAGRAM`**, or **`LINK_FIXUP_TIKTOK`** is enabled in `.env`:
+
+| Permission | Used for |
+|------------|----------|
+| **Manage Messages** | Suppress the broken embed on the user’s original message |
+
+Link fixup replies with a mirror URL (e.g. `fixupx.com`, `vxinstagram.com`, `tnktok.com`) instead of deleting the original, so thread replies stay intact.
+
+#### Member permissions (your moderators)
+
+These are **user** permissions checked by slash commands — the bot does not need them on its role:
+
+| Permission | Commands |
+|------------|----------|
+| **Manage Channels** | `/kojima setup`, `stop`, `interval`, `next`, `forcespawn` |
+
+Everyone else can use `/kojima last`, `leaderboard`, `gift`, `achievements`, `/profile`, `/gamble`, `/ping`, and meme commands without elevated permissions.
 
 ### Running the Bot
 
@@ -48,12 +110,13 @@ bun start
 bun run deploy
 ```
 
-In Discord (requires **Manage Channels** where noted):
-1. Run `/kojima setup` in the channel where you want spawns.
+In Discord:
+
+1. Run `/kojima setup` in the channel where you want spawns (requires **Manage Channels**).
 2. Wait for a spawn; reply with your catch phrase or click **Catch**.
 3. Tune timing with `/kojima interval` (min/max seconds between spawns after each catch).
 
-Bot permissions in that channel: **Send Messages**, **Attach Files**, **Embed Links**, **Read Message History** (recommended), **Add Reactions** (optional, for “nice try” 😂 when someone mistypes early). If **`LINK_FIXUP_*`** env flags are enabled, also grant **Manage Messages** there so the bot can delete and repost link messages.
+Ensure the bot’s role has the [permissions above](#bot-permissions-invite-url) in spawn channels (and **Manage Messages** where link fixup is enabled).
 
 ## Deployment (PM2)
 This project includes an `ecosystem.config.cjs` for easy deployment with PM2.

@@ -24,8 +24,11 @@ export const CONFIG = {
   /** Env: `LINK_FIXUP_INSTAGRAM` = same tokens — instagram → vxinstagram (queries stripped). */
   LINK_FIXUP_INSTAGRAM: envEnabled("LINK_FIXUP_INSTAGRAM"),
 
+  /** Env: `LINK_FIXUP_TIKTOK` = same tokens — tiktok → tnktok (queries stripped). */
+  LINK_FIXUP_TIKTOK: envEnabled("LINK_FIXUP_TIKTOK"),
+
   // Database configuration
-  DB_FILE: "bot.sqlite",
+  DB_FILE: process.env.DB_FILE || "bot.sqlite",
 };
 
 // Validate critical config

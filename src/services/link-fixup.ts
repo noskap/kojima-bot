@@ -13,9 +13,9 @@ const linkFixupPermDeniedLogged = new Set<string>();
 
 /** Call from `ClientReady` once so you know the feature loaded. */
 export function logLinkFixupStartup(): void {
-    if (!CONFIG.LINK_FIXUP_X && !CONFIG.LINK_FIXUP_INSTAGRAM) return;
+    if (!CONFIG.LINK_FIXUP_X && !CONFIG.LINK_FIXUP_INSTAGRAM && !CONFIG.LINK_FIXUP_TIKTOK) return;
     console.log(
-        `[link-fixup] Enabled — LINK_FIXUP_X=${CONFIG.LINK_FIXUP_X}  LINK_FIXUP_INSTAGRAM=${CONFIG.LINK_FIXUP_INSTAGRAM}`,
+        `[link-fixup] Enabled — LINK_FIXUP_X=${CONFIG.LINK_FIXUP_X}  LINK_FIXUP_INSTAGRAM=${CONFIG.LINK_FIXUP_INSTAGRAM}  LINK_FIXUP_TIKTOK=${CONFIG.LINK_FIXUP_TIKTOK}`,
     );
 }
 
@@ -54,10 +54,32 @@ function rewriteToVxInstagram(urlString: string): string | null {
     }
 }
 
+function isTiktokHostname(host: string): boolean {
+    const k = hostnameKey(host);
+    return k === "tiktok.com" || k.endsWith(".tiktok.com");
+}
+
+/** tiktok.com (incl. vm./vt. subdomains) → tnktok.com; strips tracking query params. */
+function rewriteToTnktok(urlString: string): string | null {
+    try {
+        const u = new URL(urlString);
+        if (!isTiktokHostname(u.hostname)) return null;
+        u.hostname = u.hostname.replace(/tiktok\.com$/i, "tnktok.com");
+        u.search = "";
+        return u.toString();
+    } catch {
+        return null;
+    }
+}
+
 function rewriteEmbedUrl(raw: string): string | null {
     if (CONFIG.LINK_FIXUP_INSTAGRAM) {
         const ig = rewriteToVxInstagram(raw);
         if (ig) return ig;
+    }
+    if (CONFIG.LINK_FIXUP_TIKTOK) {
+        const tt = rewriteToTnktok(raw);
+        if (tt) return tt;
     }
     if (CONFIG.LINK_FIXUP_X) {
         return rewriteToFixupx(raw);
@@ -66,32 +88,32 @@ function rewriteEmbedUrl(raw: string): string | null {
 }
 
 /**
- * If the message is only text (no attachments/stickers) and contains fixable URLs (X/Twitter, Instagram),
- * delete it and repost with mirror hosts so Discord embeds improve.
+ * If the message contains fixable URLs (X/Twitter, Instagram, TikTok), suppress the original
+ * embed and reply with mirror hosts so Discord embeds improve without deleting the message.
  *
  * Needs **Manage Messages** + **Send Messages** in the channel.
  */
 export async function maybeFixupEmbeddedLinks(message: Message): Promise<void> {
-    if (!CONFIG.LINK_FIXUP_X && !CONFIG.LINK_FIXUP_INSTAGRAM) return;
-    if (message.author.bot) return;
+    if (!CONFIG.LINK_FIXUP_X && !CONFIG.LINK_FIXUP_INSTAGRAM && !CONFIG.LINK_FIXUP_TIKTOK) return;
+    if (message.author.bot || message.webhookId) return;
     if (!message.guild || !message.guildId) return;
     if (!message.content.trim()) return;
-    if (message.attachments.size > 0 || message.stickers.size > 0) return;
+    if (message.stickers.size > 0) return;
 
     const hits = [...message.content.matchAll(URL_IN_TEXT)].map((m) => m[0]!);
     if (!hits.length) return;
 
-    let next = message.content;
-    let touched = false;
+    const fixedUrls: string[] = [];
     for (const raw of hits) {
         const candidate = trimUrlCandidate(raw);
         const rep = rewriteEmbedUrl(candidate);
         if (rep && rep !== candidate) {
-            next = next.split(raw).join(rep);
-            touched = true;
+            fixedUrls.push(rep);
         }
     }
-    if (!touched || next === message.content) return;
+    if (!fixedUrls.length) return;
+
+    const uniqueFixed = [...new Set(fixedUrls)];
 
     if (!message.channel?.isTextBased() || message.channel.isDMBased()) return;
 
@@ -116,15 +138,14 @@ export async function maybeFixupEmbeddedLinks(message: Message): Promise<void> {
     }
 
     try {
-        await message.delete();
+        await message.suppressEmbeds(true);
     } catch (e) {
-        console.warn("[link-fixup] could not delete message (permissions or Discord error) — paste still shows x.com:", e);
+        console.warn("[link-fixup] could not suppress embeds (permissions or Discord error):", e);
         return;
     }
 
-    const authorLabel = message.member?.displayName ?? message.author.username;
-    await message.channel.send({
-        content: `**${authorLabel}** shared:\n${next}`,
+    await message.reply({
+        content: uniqueFixed.join("\n"),
         allowedMentions: { parse: [], users: [], roles: [] },
     });
 }
