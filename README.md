@@ -105,10 +105,13 @@ bun run dev
 bun start
 ```
 
-**Slash Commands** (guild-scoped; uses `GUILD_ID` in `.env`):
+**Slash Commands** (guild-scoped; uses `GUILD_ID` in `.env` — see [Multi-server support](#multi-server-support-future) for why):
+
 ```bash
 bun run deploy
 ```
+
+For each server you operate, set `GUILD_ID` to that server’s id and run deploy again (or maintain separate `.env` / deploy scripts per server).
 
 In Discord:
 
@@ -143,3 +146,59 @@ If problems continue: stop the bot, **delete `bot.sqlite`** in the project root,
 ## Customization
 - **Re-skinning**: Change `ENTITY_NAME` in `.env`.
 - **Assets**: Replace images in `assets/images/`.
+
+## Multi-server support (future)
+
+**Current model:** The bot is intended for a small set of servers you operate. Slash commands are registered **per guild** via `GUILD_ID` in `.env` + `bun run deploy`. Gameplay itself is already guild-scoped in SQLite (`/kojima setup` writes `interaction.guildId`); the env `GUILD_ID` is **not** checked at runtime.
+
+To support **any server that invites the bot** (public / multi-tenant), the following would need to change:
+
+### Slash command registration (required)
+
+- **`src/deploy-commands.ts`** — today publishes only to `Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID)` and **wipes global commands**. Other servers never see slash commands unless you re-run deploy with their guild id.
+- Pick a registration strategy:
+  - **Global commands** — `Routes.applicationCommands(CLIENT_ID)` once; commands appear in every server (propagation can take up to ~1 hour on first deploy).
+  - **Per-guild on join** — `GuildCreate` handler deploys the same command set to each new `guild.id` (keeps fast local updates, supports 500 commands/guild).
+  - **Hybrid** — core commands global; memes guild-scoped on join.
+- Extract deploy logic into a shared module callable from both `deploy-commands.ts` and (if used) `GuildCreate`.
+- Make **`GUILD_ID` optional** in `config.ts` / `.env.example` — keep only as a dev shortcut for guild-scoped test deploys.
+- Update README setup docs to describe the chosen deploy model instead of “required `GUILD_ID`”.
+
+### Meme slash commands (required if going global)
+
+- Today each file in `assets/images/meme/` becomes its own slash command; guild cap is **500**, global cap is **~100**.
+- Core commands (`kojima`, `profile`, `gamble`, `ping`, `colonel`, `forcespawn`, …) consume ~7 slots — only ~93 global slots remain for memes as-is.
+- **`src/lib/meme-commands.ts`** would need restructuring, e.g.:
+  - Single `/meme` command with **autocomplete** over scanned meme files, or
+  - A small number of grouped subcommands, or
+  - Accept a hard cap and trim registered memes for global deploy.
+- Update `registerMemeSlashHandlers` and `buildMemeSlashBodies` to match; rename `MEME_GUILD_COMMAND_CAP` or split guild vs global limits.
+
+### Config that is global today (optional, per-guild branding)
+
+Not blockers for “works in any server,” but one `.env` applies to all guilds:
+
+- **`ENTITY_NAME`** / **`CATCH_TRIGGER`** — catch phrase and spawn copy; would need a `guild_settings` table (or similar) for per-server branding.
+- **`LINK_FIXUP_X`**, **`LINK_FIXUP_INSTAGRAM`**, **`LINK_FIXUP_TIKTOK`** — would need per-guild or per-channel toggles if servers should opt in/out independently.
+
+### Colonel / webhooks (optional)
+
+- **`colonel/`** submodule posts to a single `WEBHOOK_URL` — one channel, separate PM2 process.
+- `channels.webhook` exists in schema but is **unused** by the Bun bot.
+- Multi-server Colonel-style messaging would need per-guild webhook URLs in the database or separate sidecar configs per server.
+
+### Ops and housekeeping (nice to have)
+
+- **`GuildDelete` handler** — optionally remove `channels` rows (and other guild data) when the bot leaves a server.
+- **Rate limits** — per-guild deploy on `GuildCreate` must handle REST rate limits if many servers join at once.
+- **Duplicate command cleanup** — document migration from guild-only to global (avoid orphaned guild commands lingering).
+- **Docker / PM2** — no architectural change; one process still serves all guilds. Do **not** run multiple instances against the same token + SQLite without shared DB and distributed locks.
+- **Invite flow** — OAuth scopes (`bot`, `applications.commands`) and [permissions](#discord-permissions) already support multi-server; no change needed beyond slash registration.
+
+### Already multi-guild (no change needed)
+
+- **`channels`**, **`profiles`**, **`achievement_unlocks`** — keyed by `guildId` / channel id.
+- **Spawn loop** (`src/services/gameplay.ts`) — iterates all enabled channels across guilds.
+- **Slash command handlers** — use `interaction.guildId`; `/kojima setup` enables spawns per channel.
+- **Catch text, buttons, gamble, leaderboard, link fixup** — all use message/interaction guild context.
+- **SQLite** — single `bot.sqlite` on one host is correct for one bot process serving many guilds.
