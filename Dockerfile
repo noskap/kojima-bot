@@ -8,6 +8,8 @@ RUN bun install --frozen-lockfile --production
 COPY tsconfig.json drizzle.config.ts ./
 COPY drizzle ./drizzle
 COPY src ./src
+# Colonel quotes submodule — only messages.ts is imported at runtime
+COPY colonel/src/data ./colonel/src/data
 
 # Spawn/meme images are not in git — mount at run time, e.g. -v ./assets:/app/assets
 RUN mkdir -p /app/assets/images/spawn /app/assets/images/meme /app/data

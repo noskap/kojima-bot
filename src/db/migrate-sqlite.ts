@@ -19,9 +19,100 @@ function addColumn(db: Database, table: string, name: string, ddl: string): void
 }
 
 /**
+ * Create core tables on a fresh SQLite file (e.g. Docker volume, first run).
+ * Existing DBs skip via IF NOT EXISTS; column drift is handled below.
+ */
+function bootstrapCoreTables(db: Database): void {
+    if (!tableExists(db, "users")) {
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS "users" (
+                "id" text PRIMARY KEY NOT NULL,
+                "username" text DEFAULT ''
+            );
+        `);
+    }
+
+    if (!tableExists(db, "channels")) {
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS "channels" (
+                "id" text PRIMARY KEY NOT NULL,
+                "guild_id" text,
+                "cat" text DEFAULT '0',
+                "spawn_times_min" integer DEFAULT 60,
+                "spawn_times_max" integer DEFAULT 450,
+                "lastcatches" integer DEFAULT 0,
+                "yet_to_spawn" integer DEFAULT 0,
+                "forcespawned" integer DEFAULT 0,
+                "cattype" text DEFAULT '',
+                "appear" text DEFAULT '',
+                "cought" text DEFAULT '',
+                "webhook" text DEFAULT '',
+                "cat_rains" integer DEFAULT 0,
+                "rain_should_end" integer DEFAULT 0,
+                "last_catcher_id" text DEFAULT '',
+                "last_catcher_name" text DEFAULT '',
+                "last_catch_rarity" text DEFAULT ''
+            );
+        `);
+    }
+
+    if (!tableExists(db, "profiles")) {
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS "profiles" (
+                "id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+                "user_id" text NOT NULL,
+                "guild_id" text NOT NULL,
+                "total_catches" integer DEFAULT 0,
+                "total_catch_time" integer DEFAULT 0,
+                "time" real DEFAULT 99999999999999,
+                "timeslow" real DEFAULT 0,
+                "funny" integer DEFAULT 0,
+                "cat_Fine" integer DEFAULT 0,
+                "cat_Nice" integer DEFAULT 0,
+                "cat_Good" integer DEFAULT 0,
+                "cat_Rare" integer DEFAULT 0,
+                "cat_Wild" integer DEFAULT 0,
+                "cat_Baby" integer DEFAULT 0,
+                "cat_Epic" integer DEFAULT 0,
+                "cat_Sus" integer DEFAULT 0,
+                "cat_Brave" integer DEFAULT 0,
+                "cat_Rickroll" integer DEFAULT 0,
+                "cat_Reverse" integer DEFAULT 0,
+                "cat_Superior" integer DEFAULT 0,
+                "cat_Trash" integer DEFAULT 0,
+                "cat_Legendary" integer DEFAULT 0,
+                "cat_Mythic" integer DEFAULT 0,
+                "cat_8bit" integer DEFAULT 0,
+                "cat_Corrupt" integer DEFAULT 0,
+                "cat_Professor" integer DEFAULT 0,
+                "cat_Divine" integer DEFAULT 0,
+                "cat_Real" integer DEFAULT 0,
+                "cat_Ultimate" integer DEFAULT 0,
+                "cat_eGirl" integer DEFAULT 0,
+                "gambles" integer DEFAULT 0,
+                "slot_spins" integer DEFAULT 0,
+                "slot_wins" integer DEFAULT 0,
+                "slot_big_wins" integer DEFAULT 0,
+                "roulette_balance" integer DEFAULT 100,
+                "roulette_wins" integer DEFAULT 0,
+                "roulette_spins" integer DEFAULT 0,
+                "flip_plays" integer DEFAULT 0,
+                "cats_gifted" integer DEFAULT 0,
+                "cat_gifts_recieved" integer DEFAULT 0
+            );
+        `);
+        db.exec(
+            `CREATE UNIQUE INDEX IF NOT EXISTS "profiles_user_guild" ON "profiles" ("user_id", "guild_id");`,
+        );
+    }
+}
+
+/**
  * Additive SQLite fixes when `bot.sqlite` was created from an older schema (missing columns).
  */
 export function ensureSqliteSchema(db: Database): void {
+    bootstrapCoreTables(db);
+
     if (tableExists(db, "channels")) {
         addColumn(db, "channels", "cat", `text DEFAULT '0'`);
         addColumn(db, "channels", "spawn_times_min", "integer DEFAULT 60");

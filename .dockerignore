@@ -6,6 +6,5 @@ bot.sqlite
 coverage
 .DS_Store
 legacy_python
-colonel
 *.md
 !README.md
