@@ -8,13 +8,14 @@ import {
     type ChatInputCommandInteraction,
     type Collection,
 } from "discord.js";
+import { assetPath } from "./app-root";
 
 type LoadedSlashCommand = {
     data: SlashCommandBuilder;
     execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 };
 
-export const MEME_DIR = path.resolve(process.cwd(), "assets/images/meme");
+export const MEME_DIR = assetPath("images", "meme");
 
 /** Files Discord accepts well as attachment uploads (GIF/image or video). */
 const MEME_ATTACHMENT_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".webm"]);

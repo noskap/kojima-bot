@@ -1,6 +1,7 @@
 import path from "path";
 import { existsSync } from "fs";
 import { profiles } from "../db/schema";
+import { assetPath } from "./app-root";
 
 export type RarityDef = {
     display: string;
@@ -111,7 +112,7 @@ export function rollRarity(): RarityDef {
 }
 
 const SPAWN_IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp"] as const;
-const SPAWN_IMAGE_DIR = path.join(process.cwd(), "assets/images/spawn");
+const SPAWN_IMAGE_DIR = assetPath("images", "spawn");
 
 /** Basename stems to try for a rarity `fileKey` (exact name first, then legacy `*_cat`). */
 function spawnImageStems(fileKey: string): string[] {
@@ -138,7 +139,7 @@ export function spawnImagePathForRarity(r: RarityDef): string {
         resolveSpawnImagePath(r.fileKey) ??
         (RARITIES[0] ? resolveSpawnImagePath(RARITIES[0].fileKey) : undefined);
     if (resolved) return resolved;
-    return path.join(process.cwd(), "assets/images/cat.png");
+    return assetPath("images", "cat.png");
 }
 
 export function profileCountKey(display: string): keyof ProfileRow | undefined {

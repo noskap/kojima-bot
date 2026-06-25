@@ -8,6 +8,7 @@ import { initDB } from "./db";
 import { handleCatchButton, handleCatchText, startGameplayLoops } from "./services/gameplay";
 import { handleWordReactions, primeWordReactionEmojis } from "./services/word-reactions";
 import { logLinkFixupStartup, maybeFixupEmbeddedLinks } from "./services/link-fixup";
+import { logAssetPaths } from "./lib/log-assets";
 
 export interface Command {
     data: { name: string; toJSON: () => unknown };
@@ -58,6 +59,7 @@ async function main(): Promise<void> {
 
     client.once(Events.ClientReady, async (c) => {
         console.log(`Ready! Logged in as ${c.user.tag}`);
+        logAssetPaths();
         logLinkFixupStartup();
         initDB();
         await primeWordReactionEmojis(c);
